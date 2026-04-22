@@ -1,0 +1,95 @@
+{
+  "run_at": "2026-04-22T23:39:04+00:00",
+  "feeds": [
+    {
+      "name": "The Journal",
+      "url": "https://www.thejournal.ie/feed/",
+      "ok": true,
+      "http_status": 200,
+      "entries": 40,
+      "has_summary": true,
+      "has_content": false,
+      "summary_len": 169,
+      "content_len": 0,
+      "sample_link": "https://www.thejournal.ie/1926-census-over-74-of-people-detained-in-institutions-in-1926-were-in-mental-hospitals-7018847-Apr2026/",
+      "sample_title": "Census data reveals almost 9,000 people were confined to mental institutions in 1926",
+      "oldest_in_feed": "Wed, 22 Apr 2026 07:35:15 +0100",
+      "newest_in_feed": "Thu, 23 Apr 2026 00:05:56 +0100"
+    },
+    {
+      "name": "Irish Examiner",
+      "url": "https://feeds.feedburner.com/ietopstories",
+      "ok": true,
+      "http_status": 200,
+      "entries": 9,
+      "has_summary": true,
+      "has_content": true,
+      "summary_len": 103,
+      "content_len": 103,
+      "sample_link": "https://www.irishexaminer.com/news/munster/arid-41832095.html",
+      "sample_title": "Pfizer to cut more than 100 jobs at Ringaskiddy plant in Cork",
+      "oldest_in_feed": "2026-04-22T18:29:00+01:00",
+      "newest_in_feed": "2026-04-22T16:16:00+01:00"
+    },
+    {
+      "name": "Gript",
+      "url": "https://gript.ie/feed/",
+      "ok": true,
+      "http_status": 200,
+      "entries": 10,
+      "has_summary": true,
+      "has_content": false,
+      "summary_len": 304,
+      "content_len": 0,
+      "sample_link": "https://gript.ie/eu-launches-diversity-month-as-bloc-prepares-for-fuel-shortages/",
+      "sample_title": "EU Launches Diversity Month as bloc Prepares for fuel shortages",
+      "oldest_in_feed": "Wed, 22 Apr 2026 13:44:36 +0000",
+      "newest_in_feed": "Wed, 22 Apr 2026 18:52:30 +0000"
+    },
+    {
+      "name": "The Liberal",
+      "url": "https://theliberal.ie/feed/",
+      "ok": true,
+      "http_status": 200,
+      "entries": 100,
+      "has_summary": true,
+      "has_content": true,
+      "summary_len": 470,
+      "content_len": 2744,
+      "sample_link": "https://theliberal.ie/social-welfare-recipients-get-urged-to-sign-up-for-new-e325-weekly-payment-if-applicable/",
+      "sample_title": "Social welfare recipients get urged to sign up for new \u20ac325 weekly payment, if applicable",
+      "oldest_in_feed": "Wed, 15 Apr 2026 12:30:56 +0000",
+      "newest_in_feed": "Wed, 22 Apr 2026 21:30:53 +0000"
+    }
+  ],
+  "articles": [
+    {
+      "url": "https://www.thejournal.ie/1926-census-over-74-of-people-detained-in-institutions-in-1926-were-in-mental-hospitals-7018847-Apr2026/",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 419,
+      "word_count": 70
+    },
+    {
+      "url": "https://www.irishexaminer.com/news/munster/arid-41832095.html",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 1880,
+      "word_count": 304
+    },
+    {
+      "url": "https://gript.ie/eu-launches-diversity-month-as-bloc-prepares-for-fuel-shortages/",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 1951,
+      "word_count": 298
+    },
+    {
+      "url": "https://theliberal.ie/social-welfare-recipients-get-urged-to-sign-up-for-new-e325-weekly-payment-if-applicable/",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 2495,
+      "word_count": 398
+    }
+  ]
+}
