@@ -95,3 +95,19 @@ def check_rss_feed(name: str, url: str) -> dict[str, Any]:
         }
     )
     return result
+
+
+def check_article(url: str) -> dict[str, Any]:
+    print(f'Article: {url}')
+    result: dict[str, Any] = {'url': url, 'ok': False}
+
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        print(f'HTTP status: {response.status_code}')
+        result['http_status'] = response.status_code
+        response.raise_for_status()
+    except Exception as e:
+        print(f'FETCH FAILED: {e}')
+        result['error'] = str(e)
+    print(result)
+    return result
