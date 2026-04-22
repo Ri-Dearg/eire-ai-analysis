@@ -62,7 +62,7 @@ def check_rss_feed(name: str, url: str) -> dict[str, Any]:
         dict[str, Any]: Dictionary of information about response.
 
     """
-    print(f'Test: {name}: {url}')
+    print(f'\nTest: {name}: {url}')
 
     # Create dictionary to report information
     result: dict[str, Any] = {'name': name, 'url': url, 'ok': False}
@@ -125,7 +125,7 @@ def check_article(url: str) -> dict[str, Any]:
         dict[str, Any]: Results dictionary with info.
 
     """
-    print(f'Article: {url}')
+    print(f'\nArticle: {url}')
     result: dict[str, Any] = {'url': url, 'ok': False}
 
     # Fetch article
@@ -153,14 +153,14 @@ def main() -> None:
     """Loop through feeds and articles, assemble report for review. Output json Report."""
     feed_results = [check_rss_feed(name, url) for name, url in FEEDS.items()]
 
-    print('------- Article body extraction')
+    print('\n------- Article body extraction')
     article_results = [
         check_article(result['sample_link'])
         for result in feed_results
         if result.get('ok') and result.get('sample_link')
     ]
 
-    print('------- SUMMARY')
+    print('\n------- SUMMARY')
     for result in feed_results:
         if not result.get('ok'):
             print(f'{result["name"]}: {result.get("error", "unknown error")}')
@@ -188,7 +188,7 @@ def main() -> None:
         ),
         encoding='utf-8',
     )
-    print('Operation complete!')
+    print('\nOperation complete!')
 
 
 if __name__ == '__main__':
