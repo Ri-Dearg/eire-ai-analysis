@@ -4,6 +4,7 @@ from typing import Any
 
 import feedparser
 import requests
+import trafilatura
 from requests.exceptions import RequestException
 
 # Define Agent for testing RSS feeds.
@@ -98,6 +99,15 @@ def check_rss_feed(name: str, url: str) -> dict[str, Any]:
 
 
 def check_article(url: str) -> dict[str, Any]:
+    """Check to se if article content is readable.
+
+    Args:
+        url (str): URL for the article.
+
+    Returns:
+        dict[str, Any]: Results dictionary with info.
+
+    """
     print(f'Article: {url}')
     result: dict[str, Any] = {'url': url, 'ok': False}
 
@@ -106,8 +116,21 @@ def check_article(url: str) -> dict[str, Any]:
         print(f'HTTP status: {response.status_code}')
         result['http_status'] = response.status_code
         response.raise_for_status()
-    except Exception as e:
+    except RequestException as e:
         print(f'FETCH FAILED: {e}')
         result['error'] = str(e)
-    print(result)
+        return result
+
+    text = trafilatura.extract(response.text, include_comments=False) or ''
+    word_count = len(text.split())
+    result['ok'] = True
+    result['char_count'] = len(text)
+    result['word_count'] = word_count
+
+    if not text:
+        print('Extractor returned nothing, issue?')
+        return result
+
+    print(f'  Extracted {len(text):,} chars, {word_count:,} words')
+    print(f'  First 240 chars: {text[:240].strip()!r}')
     return result
