@@ -24,7 +24,17 @@ FEEDS: dict[str, str] = {
 }
 
 
-def check_rss_feed(name: str, url: str):
+def check_rss_feed(name: str, url: str) -> dict[str, Any]:
+    """Check an RSS feed and parse the returned information.
+
+    Args:
+        name (str): Name of the nws outlet.
+        url (str): URL of RSS feed.
+
+    Returns:
+        dict[str, Any]: Dictionary of information about response.
+
+    """
     print(f'Test: {name}: {url}')
 
     # Create dictionary to report information
@@ -65,5 +75,23 @@ def check_rss_feed(name: str, url: str):
     print(f'published: {sample.get("published", "<missing>")}')
     print(f'summary length: {summary_len:,} chars')
     print(f'content length: {content_len:,} chars')
-    print(result)
+
+    # All dates, to see how far back the feed reaches - Suggested by Chatgpt
+    dates = [e.get('published', '') for e in entries if e.get('published')]
+    if dates:
+        print(f'date range: {dates[-1]} -> {dates[0]}')
+
+    # Update result with details so they can be printed later.
+    result.update(
+        {
+            'has_summary': has_summary,
+            'has_content': has_content,
+            'summary_len': summary_len,
+            'content_len': content_len,
+            'sample_link': sample.get('link'),
+            'sample_title': sample.get('title'),
+            'oldest_in_feed': dates[-1] if dates else None,
+            'newest_in_feed': dates[0] if dates else None,
+        }
+    )
     return result
