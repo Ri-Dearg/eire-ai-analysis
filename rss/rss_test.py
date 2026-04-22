@@ -2,7 +2,9 @@
 
 from typing import Any
 
+import feedparser
 import requests
+from requests.exceptions import RequestException
 
 # Define Agent for testing RSS feeds.
 USER_AGENT: str = (
@@ -32,7 +34,17 @@ def check_rss_feed(name: str, url: str):
         print(f'HTTP status: {response.status_code}')
         result['http_status'] = response.status_code
         response.raise_for_status()
-    except Exception as e:
+    except RequestException as e:
         print(f'FETCH FAILED: {e}')
         result['error'] = str(e)
+        return result
+
+    feed = feedparser.parse(response.content)
+    entries = feed.entries
+    print(f'Items returned: {len(entries)}')
+    result['entries'] = len(entries)
+    result['ok'] = True
+
+    if not entries:
+        return result
     print(result)
