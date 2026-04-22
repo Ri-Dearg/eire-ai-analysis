@@ -1,7 +1,7 @@
 """Test feasibility of retrieving content via RSS feeds."""
 
-import json
 import datetime
+import json
 from pathlib import Path
 from typing import Any
 
@@ -128,15 +128,18 @@ def check_article(url: str) -> dict[str, Any]:
     print(f'Article: {url}')
     result: dict[str, Any] = {'url': url, 'ok': False}
 
+    # Fetch article
     if (response := _fetch(url, result)) is None:
         return result
 
+    # Attempt to extract text
     text = trafilatura.extract(response.text, include_comments=False) or ''
     word_count = len(text.split())
     result['ok'] = True
     result['char_count'] = len(text)
     result['word_count'] = word_count
 
+    # Check if extractor returned anything
     if not text:
         print('Extractor returned nothing, issue?')
         return result
@@ -147,7 +150,7 @@ def check_article(url: str) -> dict[str, Any]:
 
 
 def main() -> None:
-
+    """Loop through feeds and articles, assemble report for review. Output json Report."""
     feed_results = [check_rss_feed(name, url) for name, url in FEEDS.items()]
 
     print('------- Article body extraction')
