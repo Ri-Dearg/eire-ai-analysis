@@ -1,5 +1,8 @@
 """Test feasibility of retrieving content via RSS feeds."""
 
+import json
+import datetime
+from pathlib import Path
 from typing import Any
 
 import feedparser
@@ -141,3 +144,49 @@ def check_article(url: str) -> dict[str, Any]:
     print(f'  Extracted {len(text):,} chars, {word_count:,} words')
     print(f'  First 240 chars: {text[:240].strip()!r}')
     return result
+
+
+def main() -> None:
+
+    feed_results = [check_rss_feed(name, url) for name, url in FEEDS.items()]
+
+    print('------- Article body extraction')
+    article_results = [
+        check_article(result['sample_link'])
+        for result in feed_results
+        if result.get('ok') and result.get('sample_link')
+    ]
+
+    print('------- SUMMARY')
+    for result in feed_results:
+        if not result.get('ok'):
+            print(f'{result["name"]}: {result.get("error", "unknown error")}')
+            continue
+        body_in_rss = 'yes' if result.get('content_len', 0) > 1000 else 'no'
+        print(
+            f'✅ {result["name"]}: {result["entries"]:>3} items  |  '
+            f'body in RSS? {body_in_rss}  |  '
+            f'oldest item: {result.get("oldest_in_feed", "?")}'
+        )
+
+    # Persist for later inspection / inclusion in the proposal appendix
+    out_path = Path('rss_feasibility_results.json')
+    out_path.write_text(
+        json.dumps(
+            {
+                'run_at': datetime.datetime.now(tz=datetime.UTC).isoformat(
+                    timespec='seconds'
+                ),
+                'feeds': feed_results,
+                'articles': article_results,
+            },
+            indent=2,
+            default=str,
+        ),
+        encoding='utf-8',
+    )
+    print('Operation complete!')
+
+
+if __name__ == '__main__':
+    main()
