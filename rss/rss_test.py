@@ -25,6 +25,29 @@ FEEDS: dict[str, str] = {
 }
 
 
+def _fetch(url: str, result: dict[str, Any]) -> requests.Response | None:
+    """Fetch a url for parsing.
+
+    Args:
+        url (str): Url to fetch.
+        result (dict[str, Any]): Dictionary with info about URL.
+
+    Returns:
+        requests.Response | None: Either return response or nothing on error.
+
+    """
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        print(f'HTTP status: {response.status_code}')
+        result['http_status'] = response.status_code
+        response.raise_for_status()
+    except RequestException as e:
+        print(f'FETCH FAILED: {e}')
+        result['error'] = str(e)
+        return None
+    return response
+
+
 def check_rss_feed(name: str, url: str) -> dict[str, Any]:
     """Check an RSS feed and parse the returned information.
 
@@ -41,16 +64,7 @@ def check_rss_feed(name: str, url: str) -> dict[str, Any]:
     # Create dictionary to report information
     result: dict[str, Any] = {'name': name, 'url': url, 'ok': False}
 
-    # Make a call to url and parse response
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        print(f'HTTP status: {response.status_code}')
-        result['http_status'] = response.status_code
-        response.raise_for_status()
-    # Deal with errors
-    except RequestException as e:
-        print(f'FETCH FAILED: {e}')
-        result['error'] = str(e)
+    if (response := _fetch(url, result)) is None:
         return result
 
     # Parse the response and entries
@@ -111,14 +125,7 @@ def check_article(url: str) -> dict[str, Any]:
     print(f'Article: {url}')
     result: dict[str, Any] = {'url': url, 'ok': False}
 
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        print(f'HTTP status: {response.status_code}')
-        result['http_status'] = response.status_code
-        response.raise_for_status()
-    except RequestException as e:
-        print(f'FETCH FAILED: {e}')
-        result['error'] = str(e)
+    if (response := _fetch(url, result)) is None:
         return result
 
     text = trafilatura.extract(response.text, include_comments=False) or ''
