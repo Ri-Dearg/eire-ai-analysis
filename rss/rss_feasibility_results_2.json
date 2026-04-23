@@ -1,0 +1,95 @@
+{
+  "run_at": "2026-04-22T21:45:25",
+  "feeds": [
+    {
+      "name": "The Journal (mainstream)",
+      "url": "https://www.thejournal.ie/feed/",
+      "ok": true,
+      "http_status": 200,
+      "entries": 40,
+      "has_summary": true,
+      "has_content": false,
+      "summary_len": 67,
+      "content_len": 0,
+      "sample_link": "https://www.thejournal.ie/dublin-central-galway-west-by-elections-22-may-7020832-Apr2026/",
+      "sample_title": "It's official: The Dublin Central and Galway West by-elections will be held on 22 May",
+      "oldest_in_feed": "Wed, 22 Apr 2026 00:05:04 +0100",
+      "newest_in_feed": "Wed, 22 Apr 2026 21:02:35 +0100"
+    },
+    {
+      "name": "Irish Examiner (mainstream)",
+      "url": "https://feeds.feedburner.com/ietopstories",
+      "ok": true,
+      "http_status": 200,
+      "entries": 9,
+      "has_summary": true,
+      "has_content": true,
+      "summary_len": 103,
+      "content_len": 103,
+      "sample_link": "https://www.irishexaminer.com/news/munster/arid-41832095.html",
+      "sample_title": "Pfizer to cut more than 100 jobs at Ringaskiddy plant in Cork",
+      "oldest_in_feed": "2026-04-22T18:29:00+01:00",
+      "newest_in_feed": "2026-04-22T16:16:00+01:00"
+    },
+    {
+      "name": "Gript (fringe)",
+      "url": "https://gript.ie/feed/",
+      "ok": true,
+      "http_status": 200,
+      "entries": 10,
+      "has_summary": true,
+      "has_content": false,
+      "summary_len": 304,
+      "content_len": 0,
+      "sample_link": "https://gript.ie/eu-launches-diversity-month-as-bloc-prepares-for-fuel-shortages/",
+      "sample_title": "EU Launches Diversity Month as bloc Prepares for fuel shortages",
+      "oldest_in_feed": "Wed, 22 Apr 2026 13:44:36 +0000",
+      "newest_in_feed": "Wed, 22 Apr 2026 18:52:30 +0000"
+    },
+    {
+      "name": "The Liberal (fringe)",
+      "url": "https://theliberal.ie/feed/",
+      "ok": true,
+      "http_status": 200,
+      "entries": 100,
+      "has_summary": true,
+      "has_content": true,
+      "summary_len": 480,
+      "content_len": 2916,
+      "sample_link": "https://theliberal.ie/do-you-believe-it-fine-gaels-dublin-mayor-says-he-is-in-it-to-win-it-as-he-enters-by-election-race-2/",
+      "sample_title": "Do you believe it? Fine Gael\u2019s Dublin mayor says he is \u2018in it to win it\u2019 as he enters by-election race",
+      "oldest_in_feed": "Wed, 15 Apr 2026 11:01:57 +0000",
+      "newest_in_feed": "Wed, 22 Apr 2026 20:30:00 +0000"
+    }
+  ],
+  "articles": [
+    {
+      "url": "https://www.thejournal.ie/dublin-central-galway-west-by-elections-22-may-7020832-Apr2026/",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 419,
+      "word_count": 70
+    },
+    {
+      "url": "https://www.irishexaminer.com/news/munster/arid-41832095.html",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 1880,
+      "word_count": 304
+    },
+    {
+      "url": "https://gript.ie/eu-launches-diversity-month-as-bloc-prepares-for-fuel-shortages/",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 1951,
+      "word_count": 298
+    },
+    {
+      "url": "https://theliberal.ie/do-you-believe-it-fine-gaels-dublin-mayor-says-he-is-in-it-to-win-it-as-he-enters-by-election-race-2/",
+      "ok": true,
+      "http_status": 200,
+      "char_count": 2651,
+      "word_count": 427
+    }
+  ]
+}

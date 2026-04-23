@@ -4,83 +4,85 @@ name: Versioning
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  pull_request:
-    branches: 
-      - main
+    # Triggers the workflow on push or pull request events but only for the "main" branch
+    pull_request:
+        branches:
+            - main
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+    # Allows you to run this workflow manually from the Actions tab
+    workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+    contents: write
+    pages: write
+    id-token: write
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 # However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
-  group: "versioning"
-  cancel-in-progress: false
+    group: "versioning"
+    cancel-in-progress: false
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "versioning"
-  versioning:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    # This workflow contains a single job called "versioning"
+    versioning:
+        # The type of runner that the job will run on
+        runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
+        # Steps represent a sequence of tasks that will be executed as part of the job
+        steps:
+            # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+            - name: Checkout
+              uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
 
-      # Generate version from conventional commits
-      - name: Semver Conventional Commits
-        id: semver
-        uses: ietf-tools/semver-action@v1.11.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.head_ref || github.ref_name }}
+            # Generate version from conventional commits
+            - name: Semver Conventional Commits
+              id: semver
+              uses: ietf-tools/semver-action@v1.11.0
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  branch: ${{ github.head_ref || github.ref_name }}
 
-      # Create draft release from version
-      - name: Create Draft Release
-        uses: ncipollo/release-action@v1.21.0
-        with:
-          prerelease: true
-          draft: true
-          commit: ${{ github.sha }}
-          tag: ${{ steps.semver.outputs.next }}
-          name: ${{ steps.semver.outputs.next }}
-          body: '*pending*'
-          token: ${{ secrets.GITHUB_TOKEN }}
+            # Create draft release from version
+            - name: Create Draft Release
+              uses: ncipollo/release-action@v1.21.0
+              with:
+                  prerelease: true
+                  draft: false
+                  commit: ${{ github.sha }}
+                  tag: ${{ steps.semver.outputs.next }}
+                  name: ${{ steps.semver.outputs.next }}
+                  body: "*pending*"
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Generate changelog from updated release
-      - name: Changelog from Conventional Commits
-        id: changelog
-        uses: requarks/changelog-action@v1.10.3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.semver.outputs.next }}
-          
-      #Finalise the release
-      - name: Create Release
-        uses: ncipollo/release-action@v1.21.0
-        with:
-          allowUpdates: true
-          draft: false
-          makeLatest: true
-          tag: ${{ steps.semver.outputs.next }}
-          name: ${{ steps.semver.outputs.next }}
-          body: ${{ steps.changelog.outputs.changes }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+            # Generate changelog from updated release
+            - name: Changelog from Conventional Commits
+              id: changelog
+              uses: requarks/changelog-action@v1.10.3
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  tag: ${{ steps.semver.outputs.next }}
 
-      # Make a commit for the changelog    
-      - name: Git Auto Commit
-        uses: stefanzweifel/git-auto-commit-action@v7.1.0
-        with:
-          branch: main
-          commit_message: 'docs: 📝 update CHANGELOG.md [skip ci]'
-          file_pattern: CHANGELOG.md
+            #Finalise the release
+            - name: Create Release
+              uses: ncipollo/release-action@v1.21.0
+              with:
+                  allowUpdates: true
+                  draft: false
+                  makeLatest: true
+                  tag: ${{ steps.semver.outputs.next }}
+                  name: ${{ steps.semver.outputs.next }}
+                  body: ${{ steps.changelog.outputs.changes }}
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            # Make a commit for the changelog
+            - name: Git Auto Commit
+              uses: stefanzweifel/git-auto-commit-action@v7.1.0
+              with:
+                  branch: main
+                  commit_message: "docs: 📝 update CHANGELOG.md [skip ci]"
+                  file_pattern: CHANGELOG.md
