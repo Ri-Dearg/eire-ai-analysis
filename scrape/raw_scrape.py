@@ -37,6 +37,24 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 PAUSE_BASE = 4.0
 PAUSE_CAP = 60.0
 RESPECT_ROBOTS = True
+ACCEPTED_ERRORS = 400
+
+
+def _host_base(url: str) -> str:
+    parts = urlsplit(url)
+    return f'{parts.scheme}://{parts.netloc}'
+
+
+def _robots(session: requests.Session, base: str) -> robotparser.RobotFileParser:
+    robot_parser = robotparser.RobotFileParser()
+    try:
+        resp = session.get(f'{base}/robots.txt', timeout=REQUEST_TIMEOUT)
+        robot_parser.parse(
+            resp.text.splitlines() if resp.status_code < ACCEPTED_ERRORS else []
+        )
+    except requests.RequestException:
+        robot_parser.parse([])  # fail-open if robots.txt can't be read
+    return robot_parser
 
 
 def _pause(attempt: int) -> float:
@@ -139,8 +157,10 @@ def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
 
         if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
             wait = _retry_after(resp) or _pause(attempt)
-            print(f'  . {resp.status_code} {url}; retry'
-                  f' {attempt + 1}/{MAX_RETRIES} in {wait:.1f}s')
+            print(
+                f'  . {resp.status_code} {url}; retry'
+                f' {attempt + 1}/{MAX_RETRIES} in {wait:.1f}s'
+            )
             time.sleep(wait)
             continue
 
@@ -201,7 +221,7 @@ def _process_url(
     result = _fetch(session, raw_url)
     if result is None:
         return 'failed'
-    return 'stored' if _store_page(conn, oid, source_feed, result) else 'no_stored'
+    return 'stored' if _store_page(conn, oid, source_feed, result) else 'skipped'
 
 
 def ingest(
@@ -215,10 +235,15 @@ def ingest(
     oid = _outlet_id(conn, outlet_name)
 
     with _create_session() as session:
-        counts = Counter({'stored': 0, 'skipped': 0, 'failed': 0, 'no_stored': 0})
+        counts = Counter()
+        rules = _robots(session, _host_base(urls[0])) if RESPECT_ROBOTS and urls else None
 
         try:
             for raw_url in urls:
+                if rules is not None and not rules.can_fetch(USER_AGENT, raw_url):
+                    counts['blocked'] += 1
+                    print(f'  blocked: {raw_url}')
+                    continue
                 outcome = _process_url(conn, session, raw_url, oid, source_feed)
                 counts[outcome] += 1
                 print(f'  {outcome}: {raw_url}')
@@ -229,7 +254,7 @@ def ingest(
 
         print(
             f'\ndone: {counts["stored"]} stored, {counts["skipped"]} skipped,'
-            f' {counts["failed"]} failed'
+            f' {counts["blocked"]} blocked, {counts["failed"]} failed'
         )
         return dict(counts)
 
