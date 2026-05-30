@@ -1,6 +1,8 @@
 """WIP."""
 
+import hashlib
 import sqlite3
+from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
@@ -24,7 +26,7 @@ _TRACKING_PREFIXES = ('utm_',)
 _TRACKING_KEYS = {'fbclid', 'gclid', 'mc_cid', 'mc_eid'}
 
 
-def canonic_url(url: str) -> str:
+def _canonic_url(url: str) -> str:
     # Canonicalise a URL by normalising scheme.
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
@@ -47,7 +49,7 @@ def canonic_url(url: str) -> str:
     return urlunsplit((scheme, netloc, path, query, ''))
 
 
-def connect(db_path: str = DB_PATH) -> sqlite3.Connection:
+def _connect(db_path: str = DB_PATH) -> sqlite3.Connection:
     """Open a connection with foreign keys enforced.
 
     Args:
@@ -69,7 +71,7 @@ def connect(db_path: str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def outlet_id(conn: sqlite3.Connection, name: str) -> int:
+def _outlet_id(conn: sqlite3.Connection, name: str) -> int:
     """Get outlet ID from DB.
 
     Args:
@@ -91,14 +93,14 @@ def outlet_id(conn: sqlite3.Connection, name: str) -> int:
     return row[0]
 
 
-def create_session():
+def _create_session():
     # Create a requests session with a custom user agent.
     session = requests.Session()
     session.headers.update({'User-Agent': USER_AGENT})
     return session
 
 
-def fetch(session: requests.Session, url: str):
+def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
     # Fetch a URL with error handling and timeout.
     try:
         resp = session.get(url, timeout=REQUEST_TIMEOUT)
@@ -106,3 +108,42 @@ def fetch(session: requests.Session, url: str):
         print(f'  ! transport error {url}: {e}')
         return None
     return resp.status_code, resp.text, resp.url
+
+
+def _already_have(conn: sqlite3.Connection, url_canonical: str) -> bool:
+    return (
+        conn.execute(
+            'SELECT 1 FROM article WHERE url_canonical = ? LIMIT 1', (url_canonical,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _store_page(
+    conn: sqlite3.Connection,
+    oid: int,
+    source_feed: str,
+    result: tuple[int, str, str],
+) -> bool:
+    status, html, final_url = result
+    canon = _canonic_url(final_url)
+    content_hash = hashlib.sha256(html.encode('utf-8', 'replace')).hexdigest()
+    now = datetime.now(UTC).isoformat()
+
+    try:
+        with conn:
+            cur = conn.execute(
+                'INSERT INTO article '
+                '(outlet_id, url, url_canonical, source_feed, scraped_date) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (oid, final_url, canon, source_feed, now),
+            )
+            conn.execute(
+                'INSERT INTO raw_page '
+                '(article_id, raw_html, http_status, content_hash, fetched_date) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (cur.lastrowid, html, status, content_hash, now),
+            )
+    except sqlite3.IntegrityError:
+        return False
+    return True
