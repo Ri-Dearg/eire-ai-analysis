@@ -2,6 +2,8 @@
 
 import sqlite3
 
+import requests
+
 DB_PATH = './data/dataset.db'
 
 USER_AGENT = (
@@ -56,3 +58,18 @@ def outlet_id(conn: sqlite3.Connection, name: str) -> int:
         print(f'outlet {name!r} not found in DB.')
         raise ValueError
     return row[0]
+
+
+def create_session():
+    session = requests.Session()
+    session.headers.update({'User-Agent': USER_AGENT})
+    return session
+
+
+def fetch(session: requests.Session, url: str):
+    try:
+        resp = session.get(url, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException as e:
+        print(f'  ! transport error {url}: {e}')
+        return None
+    return resp.status_code, resp.text, resp.url
