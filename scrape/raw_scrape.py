@@ -93,7 +93,7 @@ def _outlet_id(conn: sqlite3.Connection, name: str) -> int:
     return row[0]
 
 
-def _create_session():
+def _create_session() -> requests.Session:
     # Create a requests session with a custom user agent.
     session = requests.Session()
     session.headers.update({'User-Agent': USER_AGENT})
@@ -147,3 +147,18 @@ def _store_page(
     except sqlite3.IntegrityError:
         return False
     return True
+
+
+def _process_url(
+    conn: sqlite3.Connection,
+    session: requests.Session,
+    raw_url: str,
+    oid: int,
+    source_feed: str,
+) -> str:
+    if _already_have(conn, _canonic_url(raw_url)):
+        return 'skipped'
+    result = _fetch(session, raw_url)
+    if result is None:
+        return 'failed'
+    return 'stored' if _store_page(conn, oid, source_feed, result) else 'skipped'
