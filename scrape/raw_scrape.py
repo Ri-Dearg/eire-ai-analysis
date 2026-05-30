@@ -164,7 +164,7 @@ def _process_url(
     result = _fetch(session, raw_url)
     if result is None:
         return 'failed'
-    return 'stored' if _store_page(conn, oid, source_feed, result) else 'skipped'
+    return 'stored' if _store_page(conn, oid, source_feed, result) else 'no_stored'
 
 
 def ingest(
