@@ -222,3 +222,10 @@ __marimo__/
 
 # MacOS
 .DS_Store
+
+# Dataset
+data/
+
+# Claude
+.claude/
+CLAUDE.md
