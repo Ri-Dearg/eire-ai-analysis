@@ -6,27 +6,48 @@ import sqlite3
 import time
 from collections import Counter
 from datetime import UTC, datetime
+from urllib import robotparser  # add to the urllib imports
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 
+# DATABASE
 # Path to DB file.
 DB_PATH = './data/dataset.db'
 
+# SCRAPER
 # User agent string for scraper.
 USER_AGENT = (
     'CapstoneResearchBot/0.1 (HDip Data Analytics, DBS; contact: 20074605@mydbs.ie)'
 )
-
 # Request timeout in seconds.
 REQUEST_TIMEOUT = 20
-
 # Polite delay range between requests in seconds (min, max).
 DELAY_RANGE = (4.0, 6.0)
 
+# CANONICALISATION
 # Query parameters to drop during URL canonicalisation.
 _TRACKING_PREFIXES = ('utm_',)
 _TRACKING_KEYS = {'fbclid', 'gclid', 'mc_cid', 'mc_eid'}
+
+# RETRIES
+# Retry transient failures: transport errors + these HTTP statuses.
+MAX_RETRIES = 3
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+PAUSE_BASE = 4.0
+PAUSE_CAP = 60.0
+RESPECT_ROBOTS = True
+
+
+def _pause(attempt: int) -> float:
+    # Exponential backoff with jitter, capped.
+    return random.uniform(0, min(PAUSE_BASE * (2**attempt), PAUSE_CAP))
+
+
+def _retry_after(resp: requests.Response) -> float | None:
+    # Honour Retry-After in delta-seconds form; ignore the HTTP-date form.
+    value = resp.headers.get('Retry-After')
+    return min(float(value), PAUSE_CAP) if value and value.isdigit() else None
 
 
 def _canonic_url(url: str) -> str:
@@ -104,13 +125,27 @@ def _create_session() -> requests.Session:
 
 
 def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
-    # Fetch a URL with error handling and timeout.
-    try:
-        resp = session.get(url, timeout=REQUEST_TIMEOUT)
-    except requests.RequestException as e:
-        print(f'  ! transport error {url}: {e}')
-        return None
-    return resp.status_code, resp.text, resp.url
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = session.get(url, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as e:
+            if attempt == MAX_RETRIES:
+                print(f'  ! transport error {url}: {e}')
+                return None
+            wait = _pause(attempt)
+            print(f'  . retry {attempt + 1}/{MAX_RETRIES} in {wait:.1f}s ({e})')
+            time.sleep(wait)
+            continue
+
+        if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
+            wait = _retry_after(resp) or _pause(attempt)
+            print(f'  . {resp.status_code} {url}; retry'
+                  f' {attempt + 1}/{MAX_RETRIES} in {wait:.1f}s')
+            time.sleep(wait)
+            continue
+
+        return resp.status_code, resp.text, resp.url
+    return None
 
 
 def _already_have(conn: sqlite3.Connection, url_canonical: str) -> bool:
