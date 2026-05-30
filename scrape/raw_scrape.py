@@ -91,8 +91,8 @@ def _outlet_id(conn: sqlite3.Connection, name: str) -> int:
     # Query DB for outlet ID by name.
     row = conn.execute('SELECT id FROM outlet WHERE name = ?', (name,)).fetchone()
     if row is None:
-        print(f'outlet {name!r} not found in DB.')
-        raise ValueError
+        err_msg = 'outlet {name!r} not found in DB.'
+        raise ValueError(err_msg.format(name=name))
     return row[0]
 
 
@@ -147,8 +147,10 @@ def _store_page(
                 'VALUES (?, ?, ?, ?, ?)',
                 (cur.lastrowid, html, status, content_hash, now),
             )
-    except sqlite3.IntegrityError:
-        return False
+    except sqlite3.IntegrityError as err:
+        if 'UNIQUE constraint failed: article.url_canonical' in str(err):
+            return False
+        raise
     return True
 
 
@@ -176,24 +178,25 @@ def ingest(
 ) -> dict:
     conn = _connect(db_path)
     oid = _outlet_id(conn, outlet_name)
-    session = _create_session()
-    counts = Counter()
 
-    try:
-        for raw_url in urls:
-            outcome = _process_url(conn, session, raw_url, oid, source_feed)
-            counts[outcome] += 1
-            print(f'  {outcome}: {raw_url}')
-            if outcome != 'skipped':
-                time.sleep(random.uniform(*delay_range))
-    finally:
-        conn.close()
+    with _create_session() as session:
+        counts = Counter({'stored': 0, 'skipped': 0, 'failed': 0, 'no_stored': 0})
 
-    print(
-        f'\ndone: {counts["stored"]} stored, {counts["skipped"]} skipped,'
-        f' {counts["failed"]} failed'
-    )
-    return dict(counts)
+        try:
+            for raw_url in urls:
+                outcome = _process_url(conn, session, raw_url, oid, source_feed)
+                counts[outcome] += 1
+                print(f'  {outcome}: {raw_url}')
+                if outcome != 'skipped':
+                    time.sleep(random.uniform(*delay_range))
+        finally:
+            conn.close()
+
+        print(
+            f'\ndone: {counts["stored"]} stored, {counts["skipped"]} skipped,'
+            f' {counts["failed"]} failed'
+        )
+        return dict(counts)
 
 
 if __name__ == '__main__':
