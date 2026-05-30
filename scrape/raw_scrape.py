@@ -1,7 +1,10 @@
 """WIP."""
 
 import hashlib
+import random
 import sqlite3
+import time
+from collections import Counter
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -162,3 +165,38 @@ def _process_url(
     if result is None:
         return 'failed'
     return 'stored' if _store_page(conn, oid, source_feed, result) else 'skipped'
+
+
+def ingest(
+    urls: list[str],
+    outlet_name: str,
+    source_feed: str,
+    db_path: str = DB_PATH,
+    delay_range: tuple[float, float] = DELAY_RANGE,
+) -> dict:
+    conn = _connect(db_path)
+    oid = _outlet_id(conn, outlet_name)
+    session = _create_session()
+    counts = Counter()
+
+    try:
+        for raw_url in urls:
+            outcome = _process_url(conn, session, raw_url, oid, source_feed)
+            counts[outcome] += 1
+            if outcome != 'skipped':
+                time.sleep(random.uniform(*delay_range))
+    finally:
+        conn.close()
+
+    print(
+        f'\ndone: {counts["stored"]} stored, {counts["skipped"]} skipped,'
+        f' {counts["failed"]} failed'
+    )
+    return dict(counts)
+
+
+if __name__ == '__main__':
+    sample = [
+        # "https://www.rte.ie/news/...",
+    ]
+    ingest(sample, outlet_name='rte', source_feed='sitemap')
