@@ -35,3 +35,24 @@ def connect(db_path: str = DB_PATH) -> sqlite3.Connection:
         print(f'Failed to connect to {db_path}: {e}')
         raise
     return conn
+
+
+def outlet_id(conn: sqlite3.Connection, name: str) -> int:
+    """Get outlet ID from DB.
+
+    Args:
+        conn (sqlite3.Connection): DB connection.
+        name (str): Name of outlet in DB.
+
+    Raises:
+        ValueError: If name is not in DB.
+
+    Returns:
+        int: ID of outlet ind DB.
+
+    """
+    row = conn.execute('SELECT id FROM outlet WHERE name = ?', (name,)).fetchone()
+    if row is None:
+        print(f'outlet {name!r} not found in DB.')
+        raise ValueError
+    return row[0]
