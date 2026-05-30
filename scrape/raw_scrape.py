@@ -1,6 +1,7 @@
 """WIP."""
 
 import hashlib
+import logging
 import random
 import sqlite3
 import time
@@ -10,6 +11,9 @@ from urllib import robotparser  # add to the urllib imports
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
+
+logger = logging.getLogger(__name__)
+
 
 # DATABASE
 # Path to DB file.
@@ -106,9 +110,9 @@ def _connect(db_path: str = DB_PATH) -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute('PRAGMA foreign_keys = ON')
         conn.execute('PRAGMA quick_check')
-        print(f'Connected to {db_path}')
-    except sqlite3.OperationalError as e:
-        print(f'Failed to connect to {db_path}: {e}')
+        logger.info('Connected to %s', db_path)
+    except sqlite3.OperationalError:
+        logger.exception('Failed to connect to %s', db_path)
         raise
     return conn
 
@@ -148,18 +152,22 @@ def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
             resp = session.get(url, timeout=REQUEST_TIMEOUT)
         except requests.RequestException as e:
             if attempt == MAX_RETRIES:
-                print(f'  ! transport error {url}: {e}')
+                logger.exception('  ! transport error %s: %s', url, e)
                 return None
             wait = _pause(attempt)
-            print(f'  . retry {attempt + 1}/{MAX_RETRIES} in {wait:.1f}s ({e})')
+            logger.warning('retry %d/%d in %.1fs (%s)', attempt + 1, MAX_RETRIES, wait, e)
             time.sleep(wait)
             continue
 
         if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
             wait = _retry_after(resp) or _pause(attempt)
-            print(
-                f'  . {resp.status_code} {url}; retry'
-                f' {attempt + 1}/{MAX_RETRIES} in {wait:.1f}s'
+            logger.warning(
+                '%s %s; retry %d/%d in %.1fs',
+                resp.status_code,
+                url,
+                attempt + 1,
+                MAX_RETRIES,
+                wait,
             )
             time.sleep(wait)
             continue
@@ -242,24 +250,32 @@ def ingest(
             for raw_url in urls:
                 if rules is not None and not rules.can_fetch(USER_AGENT, raw_url):
                     counts['blocked'] += 1
-                    print(f'  blocked: {raw_url}')
+                    logger.info('blocked: %s', raw_url)
                     continue
                 outcome = _process_url(conn, session, raw_url, oid, source_feed)
                 counts[outcome] += 1
-                print(f'  {outcome}: {raw_url}')
+                logger.info('%s: %s', outcome, raw_url)
                 if outcome != 'skipped':
                     time.sleep(random.uniform(*delay_range))
         finally:
             conn.close()
 
-        print(
-            f'\ndone: {counts["stored"]} stored, {counts["skipped"]} skipped,'
-            f' {counts["blocked"]} blocked, {counts["failed"]} failed'
+        logger.info(
+            'done: %d stored, %d skipped, %d blocked, %d failed',
+            counts['stored'],
+            counts['skipped'],
+            counts['blocked'],
+            counts['failed'],
         )
         return dict(counts)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
     sample = [
         'https://www.rte.ie/news/business/2026/0331/1566027-unilever-nears-deal-to-merge-foods-unit-with-mccormick/',
         'https://www.rte.ie/news/business/2026/0331/1566035-business-post-appoints-mark-beard-as-ceo/',
