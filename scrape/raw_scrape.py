@@ -1,4 +1,9 @@
-"""WIP."""
+"""Use a list of URLs to fetch and store raw HTML pages in the DB, with metadata.
+
+Designed to be used with URLs from sitemaps, but can be used with any list of article URLs.
+Optionally respects robots.txt and retries transient failures with pause.
+Logs progress and outcomes.
+"""
 
 import hashlib
 import logging
@@ -12,6 +17,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 
+# LOGGING
 logger = logging.getLogger(__name__)
 
 
@@ -44,36 +50,38 @@ RESPECT_ROBOTS = True
 ACCEPTED_ERRORS = 400
 
 
-def _host_base(url: str) -> str:
-    parts = urlsplit(url)
-    return f'{parts.scheme}://{parts.netloc}'
+# ---------- ARTICLE PROCESSING ----------
 
 
-def _robots(session: requests.Session, base: str) -> robotparser.RobotFileParser:
-    robot_parser = robotparser.RobotFileParser()
-    try:
-        resp = session.get(f'{base}/robots.txt', timeout=REQUEST_TIMEOUT)
-        robot_parser.parse(
-            resp.text.splitlines() if resp.status_code < ACCEPTED_ERRORS else []
-        )
-    except requests.RequestException:
-        robot_parser.parse([])  # fail-open if robots.txt can't be read
-    return robot_parser
+def _already_have(conn: sqlite3.Connection, url_canonical: str) -> bool:
+    """Check if the URL has already been parsed and stored.
 
+    Args:
+        conn (sqlite3.Connection): Connection to DB.
+        url_canonical (str): Canonicalised URL.
 
-def _pause(attempt: int) -> float:
-    # Exponential backoff with jitter, capped.
-    return random.uniform(0, min(PAUSE_BASE * (2**attempt), PAUSE_CAP))
+    Returns:
+        bool: Is stored in the DB?
 
-
-def _retry_after(resp: requests.Response) -> float | None:
-    # Honour Retry-After in delta-seconds form; ignore the HTTP-date form.
-    value = resp.headers.get('Retry-After')
-    return min(float(value), PAUSE_CAP) if value and value.isdigit() else None
+    """
+    return (
+        conn.execute(
+            'SELECT 1 FROM article WHERE url_canonical = ? LIMIT 1', (url_canonical,)
+        ).fetchone()
+        is not None
+    )
 
 
 def _canonic_url(url: str) -> str:
-    # Canonicalise a URL by normalising scheme.
+    """Strip trackers from end of URL.
+
+    Args:
+        url (str): URL to strip.
+
+    Returns:
+        str: Canonicalised URL.
+
+    """
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
     netloc = parts.netloc.lower()
@@ -93,6 +101,202 @@ def _canonic_url(url: str) -> str:
         path = path.rstrip('/')
 
     return urlunsplit((scheme, netloc, path, query, ''))
+
+
+def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
+    """Collect and return article data.
+
+    Args:
+        session (requests.Session): User-agent session.
+        url (str): Url to parse.
+
+    Returns:
+        tuple[int, str, str] | None: critical response data.
+
+    """
+    # Loop with retries for transport errors and certain HTTP statuses.
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = session.get(url, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as e:
+            if attempt == MAX_RETRIES:
+                logger.exception('  ! transport error %s:', url)
+                return None
+            # Wait with exponential pause and jitter before retrying.
+            wait = _pause(attempt)
+            logger.warning('retry %d/%d in %.1fs (%s)', attempt + 1, MAX_RETRIES, wait, e)
+            time.sleep(wait)
+            continue
+
+        # Retry on certain HTTP statuses.
+        if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
+            wait = _retry_after(resp) or _pause(attempt)
+            logger.warning(
+                '%s %s; retry %d/%d in %.1fs',
+                resp.status_code,
+                url,
+                attempt + 1,
+                MAX_RETRIES,
+                wait,
+            )
+            # Wait before retrying.
+            time.sleep(wait)
+            continue
+
+        # Return critical data for successful response or error.
+        return resp.status_code, resp.text, resp.url
+    return None
+
+
+def _pause(attempt: int) -> float:
+    """Calculate time to pause.
+
+    Args:
+        attempt (int): Number of attempts.
+
+    Returns:
+        float: Length of pause.
+
+    """
+    return random.uniform(0, min(PAUSE_BASE * (2**attempt), PAUSE_CAP))
+
+
+def _process_url(
+    conn: sqlite3.Connection,
+    session: requests.Session,
+    raw_url: str,
+    oid: int,
+    source_feed: str,
+) -> str:
+    """Check if the URL is already stored, skip if so; otherwise fetch and store it.
+
+    Args:
+        conn (sqlite3.Connection): DB connection.
+        session (requests.Session): User-agent session for fetching.
+        raw_url (str): Url from sitemap.
+        oid (int): Outlet ID.
+        source_feed (str): Source feed type.
+
+    Returns:
+        str: value of result: 'skipped', 'failed', 'stored', or 'not_stored'.
+
+    """
+    if _already_have(conn, _canonic_url(raw_url)):
+        return 'skipped'
+    result = _fetch(session, raw_url)
+    if result is None:
+        return 'failed'
+    return 'stored' if _store_page(conn, oid, source_feed, result) else 'not_stored'
+
+
+def _retry_after(resp: requests.Response) -> float | None:
+    """Get retry delay from Retry-After header.
+
+    Args:
+        resp (requests.Response): Response object.
+
+    Returns:
+        float | None: Retry delay in seconds.
+
+    """
+    value = resp.headers.get('Retry-After')
+    return min(float(value), PAUSE_CAP) if value and value.isdigit() else None
+
+
+def _store_page(
+    conn: sqlite3.Connection,
+    oid: int,
+    source_feed: str,
+    result: tuple[int, str, str],
+) -> bool:
+    """Store and insert data into DB.
+
+    Args:
+        conn (sqlite3.Connection): Connection to DB.
+        oid (int): Outlet ID.
+        source_feed (str): Source feed type.
+        result (tuple[int, str, str]): Fetched data.
+
+    Returns:
+        bool: Was the data stored successfully?
+
+    """
+    status, html, final_url = result
+    canon = _canonic_url(final_url)
+    content_hash = hashlib.sha256(html.encode('utf-8', 'replace')).hexdigest()
+    now = datetime.now(UTC).isoformat()
+
+    try:
+        with conn:
+            # Attempt to insert article and raw page data.
+            # If the canonical URL already exists, skip storing.
+            cur = conn.execute(
+                'INSERT INTO article '
+                '(outlet_id, url, url_canonical, source_feed, scraped_date) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (oid, final_url, canon, source_feed, now),
+            )
+            conn.execute(
+                'INSERT INTO raw_page '
+                '(article_id, raw_html, http_status, content_hash, fetched_date) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (cur.lastrowid, html, status, content_hash, now),
+            )
+    except sqlite3.IntegrityError as err:
+        if 'UNIQUE constraint failed: article.url_canonical' in str(err):
+            return False
+        raise
+    return True
+
+
+# ---------- ROBOTS ----------
+def _host_base(url: str) -> str:
+    """Split url to get host base url.
+
+    Args:
+        url (str): website url.
+
+    Returns:
+        str: base url for host.
+
+    """
+    parts = urlsplit(url)
+    return f'{parts.scheme}://{parts.netloc}'
+
+
+def _robots(session: requests.Session, base: str) -> robotparser.RobotFileParser:
+    """Parse site robots.txt.
+
+    Args:
+        session (requests.Session): opened user-agent session.
+        base (str): base url for website.
+
+    Returns:
+        robotparser.RobotFileParser: Parsed robot.txt file.
+
+    """
+    robot_parser = robotparser.RobotFileParser()
+    try:
+        resp = session.get(f'{base}/robots.txt', timeout=REQUEST_TIMEOUT)
+        robot_parser.parse(
+            resp.text.splitlines() if resp.status_code < ACCEPTED_ERRORS else []
+        )
+    except requests.RequestException:
+        robot_parser.parse([])  # fail-open if robots.txt can't be read
+    return robot_parser
+
+
+# ---------- SETUP ----------
+def _create_session() -> requests.Session:
+    """Create a session and user agent for crawling.
+
+    Returns:
+        requests.Session: Session for crawling.
+
+    """
+    session = requests.Session()
+    session.headers.update({'User-Agent': USER_AGENT})
+    return session
 
 
 def _connect(db_path: str = DB_PATH) -> sqlite3.Connection:
@@ -139,99 +343,7 @@ def _outlet_id(conn: sqlite3.Connection, name: str) -> int:
     return row[0]
 
 
-def _create_session() -> requests.Session:
-    # Create a requests session with a custom user agent.
-    session = requests.Session()
-    session.headers.update({'User-Agent': USER_AGENT})
-    return session
-
-
-def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            resp = session.get(url, timeout=REQUEST_TIMEOUT)
-        except requests.RequestException as e:
-            if attempt == MAX_RETRIES:
-                logger.exception('  ! transport error %s: %s', url, e)
-                return None
-            wait = _pause(attempt)
-            logger.warning('retry %d/%d in %.1fs (%s)', attempt + 1, MAX_RETRIES, wait, e)
-            time.sleep(wait)
-            continue
-
-        if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
-            wait = _retry_after(resp) or _pause(attempt)
-            logger.warning(
-                '%s %s; retry %d/%d in %.1fs',
-                resp.status_code,
-                url,
-                attempt + 1,
-                MAX_RETRIES,
-                wait,
-            )
-            time.sleep(wait)
-            continue
-
-        return resp.status_code, resp.text, resp.url
-    return None
-
-
-def _already_have(conn: sqlite3.Connection, url_canonical: str) -> bool:
-    return (
-        conn.execute(
-            'SELECT 1 FROM article WHERE url_canonical = ? LIMIT 1', (url_canonical,)
-        ).fetchone()
-        is not None
-    )
-
-
-def _store_page(
-    conn: sqlite3.Connection,
-    oid: int,
-    source_feed: str,
-    result: tuple[int, str, str],
-) -> bool:
-    status, html, final_url = result
-    canon = _canonic_url(final_url)
-    content_hash = hashlib.sha256(html.encode('utf-8', 'replace')).hexdigest()
-    now = datetime.now(UTC).isoformat()
-
-    try:
-        with conn:
-            cur = conn.execute(
-                'INSERT INTO article '
-                '(outlet_id, url, url_canonical, source_feed, scraped_date) '
-                'VALUES (?, ?, ?, ?, ?)',
-                (oid, final_url, canon, source_feed, now),
-            )
-            conn.execute(
-                'INSERT INTO raw_page '
-                '(article_id, raw_html, http_status, content_hash, fetched_date) '
-                'VALUES (?, ?, ?, ?, ?)',
-                (cur.lastrowid, html, status, content_hash, now),
-            )
-    except sqlite3.IntegrityError as err:
-        if 'UNIQUE constraint failed: article.url_canonical' in str(err):
-            return False
-        raise
-    return True
-
-
-def _process_url(
-    conn: sqlite3.Connection,
-    session: requests.Session,
-    raw_url: str,
-    oid: int,
-    source_feed: str,
-) -> str:
-    if _already_have(conn, _canonic_url(raw_url)):
-        return 'skipped'
-    result = _fetch(session, raw_url)
-    if result is None:
-        return 'failed'
-    return 'stored' if _store_page(conn, oid, source_feed, result) else 'skipped'
-
-
+# ---------- MAIN FUNCTION ----------
 def ingest(
     urls: list[str],
     outlet_name: str,
@@ -243,7 +355,9 @@ def ingest(
     oid = _outlet_id(conn, outlet_name)
 
     with _create_session() as session:
-        counts = Counter()
+        counts = Counter(
+            {'stored': 0, 'skipped': 0, 'blocked': 0, 'failed': 0, 'not_stored': 0}
+        )
         rules = _robots(session, _host_base(urls[0])) if RESPECT_ROBOTS and urls else None
 
         try:
@@ -261,11 +375,12 @@ def ingest(
             conn.close()
 
         logger.info(
-            'done: %d stored, %d skipped, %d blocked, %d failed',
+            'done: %d stored, %d skipped, %d blocked, %d failed, %d not stored',
             counts['stored'],
             counts['skipped'],
             counts['blocked'],
             counts['failed'],
+            counts['not_stored'],
         )
         return dict(counts)
 
