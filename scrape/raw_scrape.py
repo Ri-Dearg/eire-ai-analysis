@@ -1,6 +1,7 @@
 """WIP."""
 
 import sqlite3
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 
@@ -73,3 +74,23 @@ def fetch(session: requests.Session, url: str):
         print(f'  ! transport error {url}: {e}')
         return None
     return resp.status_code, resp.text, resp.url
+
+
+def canonic_url(url: str) -> str:
+    parts = urlsplit(url.strip())
+    scheme = parts.scheme.lower()
+    netloc = parts.netloc.lower()
+
+    kept = [
+        (key, value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key not in _TRACKING_KEYS
+        and not any(key.startswith(prefix) for prefix in _TRACKING_PREFIXES)
+    ]
+    query = urlencode(kept)
+
+    path = parts.path
+    if path.endswith('/') and path != '/':
+        path = path.rstrip('/')
+
+    return urlunsplit((scheme, netloc, path, query, ''))
