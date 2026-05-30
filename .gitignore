@@ -225,3 +225,7 @@ __marimo__/
 
 # Dataset
 data/
+
+# Claude
+.claude/
+CLAUDE.md
