@@ -1,6 +1,6 @@
 """Use a list of URLs to fetch and store raw HTML pages in the DB, with metadata.
 
-Designed to be used with URLs from sitemaps, but can be used with any list of article URLs.
+Designed to be used with URLs from sitemaps, but can be used with a list of article URLs.
 Optionally respects robots.txt and retries transient failures with pause.
 Logs progress and outcomes.
 """
@@ -12,7 +12,7 @@ import sqlite3
 import time
 from collections import Counter
 from datetime import UTC, datetime
-from urllib import robotparser  # add to the urllib imports
+from urllib import robotparser
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
@@ -47,12 +47,10 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 PAUSE_BASE = 4.0
 PAUSE_CAP = 60.0
 RESPECT_ROBOTS = True
-ACCEPTED_ERRORS = 400
+HTTP_ERROR_STATUS = 400
 
 
 # ---------- ARTICLE PROCESSING ----------
-
-
 def _already_have(conn: sqlite3.Connection, url_canonical: str) -> bool:
     """Check if the URL has already been parsed and stored.
 
@@ -120,7 +118,7 @@ def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
             resp = session.get(url, timeout=REQUEST_TIMEOUT)
         except requests.RequestException as e:
             if attempt == MAX_RETRIES:
-                logger.exception('  ! transport error %s:', url)
+                logger.exception('transport error %s', url)
                 return None
             # Wait with exponential pause and jitter before retrying.
             wait = _pause(attempt)
@@ -279,7 +277,7 @@ def _robots(session: requests.Session, base: str) -> robotparser.RobotFileParser
     try:
         resp = session.get(f'{base}/robots.txt', timeout=REQUEST_TIMEOUT)
         robot_parser.parse(
-            resp.text.splitlines() if resp.status_code < ACCEPTED_ERRORS else []
+            resp.text.splitlines() if resp.status_code < HTTP_ERROR_STATUS else []
         )
     except requests.RequestException:
         robot_parser.parse([])  # fail-open if robots.txt can't be read
@@ -313,7 +311,9 @@ def _connect(db_path: str = DB_PATH) -> sqlite3.Connection:
     try:
         conn = sqlite3.connect(db_path)
         conn.execute('PRAGMA foreign_keys = ON')
-        conn.execute('PRAGMA quick_check')
+        if conn.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+            err_msg = f'quick_check failed for {db_path}'
+            raise sqlite3.DatabaseError(err_msg)
         logger.info('Connected to %s', db_path)
     except sqlite3.OperationalError:
         logger.exception('Failed to connect to %s', db_path)
@@ -332,7 +332,7 @@ def _outlet_id(conn: sqlite3.Connection, name: str) -> int:
         ValueError: If name is not in DB.
 
     Returns:
-        int: ID of outlet ind DB.
+        int: ID of outlet in DB.
 
     """
     # Query DB for outlet ID by name.
@@ -350,42 +350,67 @@ def ingest(
     source_feed: str,
     db_path: str = DB_PATH,
     delay_range: tuple[float, float] = DELAY_RANGE,
-) -> dict:
+) -> dict[str, int]:
+    """Process URLS, storing results in DB and logging outcomes.
+
+    Args:
+        urls (list[str]): List of article URLs to process.
+        outlet_name (str): Name of the outlet.
+        source_feed (str): Source feed for the articles.
+        db_path (str, optional): Path to the database. Defaults to DB_PATH.
+        delay_range (tuple[float, float], optional): Delay. Defaults to DELAY_RANGE.
+
+    Returns:
+        dict: Counts of outcomes: stored, skipped, blocked, failed, not_stored.
+
+    """
+    # Open DB connection.
     conn = _connect(db_path)
-    oid = _outlet_id(conn, outlet_name)
 
-    with _create_session() as session:
-        counts = Counter(
-            {'stored': 0, 'skipped': 0, 'blocked': 0, 'failed': 0, 'not_stored': 0}
-        )
-        rules = _robots(session, _host_base(urls[0])) if RESPECT_ROBOTS and urls else None
+    try:
+        # Get outlet ID from DB.
+        oid = _outlet_id(conn, outlet_name)
 
-        try:
+        # Create session and robots.txt rules.
+        with _create_session() as session:
+            counts = Counter(
+                {'stored': 0, 'skipped': 0, 'blocked': 0, 'failed': 0, 'not_stored': 0}
+            )
+            rules = (
+                _robots(session, _host_base(urls[0])) if RESPECT_ROBOTS and urls else None
+            )
+
+            # Process each URL: check robots.txt.
             for raw_url in urls:
                 if rules is not None and not rules.can_fetch(USER_AGENT, raw_url):
                     counts['blocked'] += 1
                     logger.info('blocked: %s', raw_url)
                     continue
+                # Process URL and store result, counting outcomes.
                 outcome = _process_url(conn, session, raw_url, oid, source_feed)
                 counts[outcome] += 1
                 logger.info('%s: %s', outcome, raw_url)
                 if outcome != 'skipped':
                     time.sleep(random.uniform(*delay_range))
-        finally:
-            conn.close()
 
-        logger.info(
-            'done: %d stored, %d skipped, %d blocked, %d failed, %d not stored',
-            counts['stored'],
-            counts['skipped'],
-            counts['blocked'],
-            counts['failed'],
-            counts['not_stored'],
-        )
-        return dict(counts)
+    # Ensure DB connection is closed.
+    finally:
+        conn.close()
+
+    # Log summary of outcomes.
+    logger.info(
+        'done: %d stored, %d skipped, %d blocked, %d failed, %d not stored',
+        counts['stored'],
+        counts['skipped'],
+        counts['blocked'],
+        counts['failed'],
+        counts['not_stored'],
+    )
+    return dict(counts)
 
 
 if __name__ == '__main__':
+    # Basic logging setup.
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(message)s',
