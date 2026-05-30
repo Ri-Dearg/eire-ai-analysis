@@ -1,0 +1,37 @@
+"""WIP."""
+
+import sqlite3
+
+DB_PATH = './data/dataset.db'
+
+USER_AGENT = (
+    'CapstoneResearchBot/0.1 (HDip Data Analytics, DBS; contact: 20074605@mydbs.ie)'
+)
+
+REQUEST_TIMEOUT = 20
+
+DELAY_RANGE = (4.0, 6.0)
+
+_TRACKING_PREFIXES = ('utm_',)
+_TRACKING_KEYS = {'fbclid', 'gclid', 'mc_cid', 'mc_eid'}
+
+
+def connect(db_path: str = DB_PATH) -> sqlite3.Connection:
+    """Open a connection with foreign keys enforced.
+
+    Args:
+        db_path (str, optional): DB location. Defaults to DB_PATH.
+
+    Returns:
+        sqlite3.Connection: Connection to DB.
+
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute('PRAGMA foreign_keys = ON')
+        conn.execute('PRAGMA integrity_check')
+        print(f'Connected to {db_path}')
+    except sqlite3.OperationalError as e:
+        print(f'Failed to connect to {db_path}: {e}')
+        raise
+    return conn
