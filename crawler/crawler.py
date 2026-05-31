@@ -2,6 +2,8 @@
 
 import logging
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 # ---------- CONFIG ----------
@@ -17,10 +19,36 @@ INTER_REQUEST_DELAY = 0.5
 
 # Standard sitemap locations to try, in order (same as the probe).
 SITEMAP_CANDIDATES = (
-    '/sitemap_index.xml',  # Yoast SEO (most common on WordPress)
-    '/sitemap.xml',  # Plain default
-    '/sitemaps/sitemap.xml',  # Some sites put them in a subfolder
+    '/sitemap_index.xml',
+    '/sitemap.xml',
+    '/sitemaps/sitemap.xml',
     '/sitemap-index/44-google_sitemap.xml',
-    '/wp-sitemap.xml',  # WordPress core (5.5+)
-    '/news-sitemap.xml',  # Google News sitemap convention
+    '/wp-sitemap.xml',
+    '/news-sitemap.xml',
 )
+
+# HTTP status that counts as a successful fetch.
+HTTP_OK = 200
+
+
+# ---------- FETCH / PARSE ----------
+def fetch_xml(url: str) -> str | None:
+    """Fetch a URL and return its body if it looks like sitemap XML.
+
+    Args:
+        url (str): URL to fetch.
+
+    Returns:
+        str | None: Response body if it is sitemap XML, else None.
+
+    """
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException:
+        logger.warning('fetch failed: %s', url)
+        return None
+    if resp.status_code != HTTP_OK:
+        return None
+    if '<urlset' in resp.text or '<sitemapindex' in resp.text:
+        return resp.text
+    return None
