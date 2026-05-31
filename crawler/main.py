@@ -231,7 +231,7 @@ def _is_article(url: str, outlet: Outlet) -> bool:
     return outlet.article_re.match(url) is not None
 
 
-def urls_to_articles(
+def _urls_to_articles(
     locs: Iterable[str],
     outlet: Outlet,
     captured: set[str],
@@ -301,7 +301,7 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
     # Process any direct article links in the top-level sitemap.
     if direct_links:
         logger.info('Direct article links found in top-level sitemap.')
-        articles.extend(urls_to_articles(direct_links, outlet, captured_urls))
+        articles.extend(_urls_to_articles(direct_links, outlet, captured_urls))
 
     # Process sub-sitemaps, with an optional cap.
     if max_sub_sitemaps is not None:
@@ -317,7 +317,7 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
         if not xml:
             logger.warning('%d/%d failed: %s', i, total, sitemap_url)
             continue
-        found = urls_to_articles(_parse_sitemap(xml), outlet, captured_urls)
+        found = _urls_to_articles(_parse_sitemap(xml), outlet, captured_urls)
         articles.extend(found)
         logger.info('%d/%d %s: +%d articles', i, total, sitemap_url, len(found))
 
