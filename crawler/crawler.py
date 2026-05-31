@@ -1,6 +1,7 @@
 """WIP."""
 
 import logging
+import time
 
 import requests
 
@@ -48,7 +49,30 @@ def fetch_xml(url: str) -> str | None:
         logger.warning('fetch failed: %s', url)
         return None
     if resp.status_code != HTTP_OK:
+        logger.warning('Non-OK status code %d found at %s', resp.status_code, url)
         return None
     if '<urlset' in resp.text or '<sitemapindex' in resp.text:
+        logger.info('XML found at %s', url)
         return resp.text
     return None
+
+
+def find_sitemap(base_url: str) -> tuple[str | None, str | None]:
+    """Try common sitemap locations until one returns sitemap XML.
+
+    Args:
+        base_url (str): Outlet root URL.
+
+    Returns:
+        tuple[str | None, str | None]: The sitemap (url, xml), or (None, None)
+            if none of the candidate locations returned sitemap XML.
+
+    """
+    for path in SITEMAP_CANDIDATES:
+        url = base_url.rstrip('/') + path
+        xml = fetch_xml(url)
+        if xml:
+            logger.info('sitemap found: %s', url)
+            return url, xml
+        time.sleep(INTER_REQUEST_DELAY)
+    return None, None
