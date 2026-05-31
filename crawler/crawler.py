@@ -51,6 +51,22 @@ class Outlet:
     article_re: re.Pattern[str]
 
 
+# RTE news articles take two URL shapes, both of which we want:
+# news/business/2026/0331/1566044-...
+# no category, e.g. /news/2026/0330/1565927-...
+# The category segment is therefore optional. This deliberately excludes
+# /sport/, /radio/, /entertainment/, /lifestyle/, /culture/, /brainstorm/ etc.
+_RTE_NEWS_RE = re.compile(r'^https?://(?:www\.)?rte\.ie/news/(?:[^/]+/)?\d{4}/\d{4}/\d+')
+
+OUTLETS: dict[str, Outlet] = {
+    'rte': Outlet(
+        slug='rte',
+        base_url='https://www.rte.ie',
+        article_re=_RTE_NEWS_RE,
+    ),
+}
+
+
 # ---------- FETCH / PARSE ----------
 def fetch_xml(url: str) -> str | None:
     """Fetch a URL and return its body if it looks like sitemap XML.
