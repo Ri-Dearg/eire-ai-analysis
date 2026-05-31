@@ -57,8 +57,9 @@ class Outlet:
 # no category, e.g. /news/2026/0330/1565927-...
 # The category segment is therefore optional. This deliberately excludes
 # /sport/, /radio/, /entertainment/, /lifestyle/, /culture/, /brainstorm/ etc.
-_RTE_NEWS_RE = re.compile(r'^https?://(?:www\.)?rte\.ie/news/(?:[^/]+/)?\d{4}/\d{4}/\d+')
-
+_RTE_NEWS_RE = re.compile(
+    r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
+)
 OUTLETS: dict[str, Outlet] = {
     'rte': Outlet(
         slug='rte',
@@ -69,7 +70,7 @@ OUTLETS: dict[str, Outlet] = {
 
 
 # ---------- FETCH / PARSE ----------
-def fetch_xml(url: str) -> str | None:
+def _fetch_xml(url: str) -> str | None:
     """Fetch a URL and return its body if it looks like sitemap XML.
 
     Args:
@@ -93,7 +94,7 @@ def fetch_xml(url: str) -> str | None:
     return None
 
 
-def find_sitemap(base_url: str) -> str | None:
+def _find_sitemap(base_url: str) -> str | None:
     """Try common sitemap locations until one returns sitemap XML.
 
     Args:
@@ -105,7 +106,7 @@ def find_sitemap(base_url: str) -> str | None:
     """
     for path in SITEMAP_CANDIDATES:
         url = base_url.rstrip('/') + path
-        xml = fetch_xml(url)
+        xml = _fetch_xml(url)
         if xml:
             logger.info('sitemap found: %s', url)
             return xml
@@ -113,7 +114,7 @@ def find_sitemap(base_url: str) -> str | None:
     return None
 
 
-def parse_sitemap(xml: str) -> list[str]:
+def _parse_sitemap(xml: str) -> list[str]:
     """Extract the <loc> URLs from a sitemap or a sitemap index.
 
     Args:
@@ -127,14 +128,42 @@ def parse_sitemap(xml: str) -> list[str]:
     return [loc.text.strip() for loc in soup.find_all('loc')]
 
 
+# ---------- SORT ----------
+def _clean_url(url: str) -> str:
+    """Return a cleaned version of the URL for deduplication.
+
+    Args:
+        url (str): URL from the sitemap.
+
+    Returns:
+        str: Normalised key.
+
+    """
+    return url.strip().split('#', 1)[0].rstrip('/')
+
+
+def _is_article(url: str, outlet: Outlet) -> bool:
+    """Decide whether a URL is a sampleable.
+
+    Args:
+        url (str): URL to test.
+        outlet (Outlet): Outlet configuration providing the filter.
+
+    Returns:
+        bool: True if the URL should be sampled.
+
+    """
+    return outlet.article_re.match(url) is not None
+
+
 # ---------- COLLECT ----------
 def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
 
-    top_xml = find_sitemap(outlet.base_url)
+    top_xml = _find_sitemap(outlet.base_url)
     if not top_xml:
         logger.error('no sitemap for %s at standard locations', outlet.slug)
         return []
-    top_urls = parse_sitemap(top_xml)
+    top_urls = _parse_sitemap(top_xml)
     sub_urls = [url for url in top_urls if url.endswith('.xml')]
     direct_links = [url for url in top_urls if not url.endswith('.xml')]
 
@@ -145,9 +174,17 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
 
     for i, sm_url in enumerate(sub_urls, 1):
         time.sleep(INTER_REQUEST_DELAY)
-        xml = fetch_xml(sm_url)
+        xml = _fetch_xml(sm_url)
         if not xml:
             logger.warning('%d/%d failed: %s', i, total, sm_url)
             continue
-        return parse_sitemap(xml)
+        xml_urls = _parse_sitemap(xml)
+        print(xml_urls)
+        for url in xml_urls:
+            if _is_article(url, outlet):
+                print(_clean_url(url))
+
     return None
+
+
+collect(OUTLETS['rte'], max_sub_sitemaps=2)
