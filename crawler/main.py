@@ -1,4 +1,4 @@
-"""WIP."""
+"""Functions to crawl sitemaps, extract article URLs with publication dates."""
 
 from __future__ import annotations
 
