@@ -1,15 +1,15 @@
-# This is a basic workflow to help you get started with Actions
+# Versioning + changelog
 
 name: Versioning
 
 # Controls when the workflow will run
 on:
-    # Triggers the workflow on push or pull request events but only for the "main" branch
+    # Fires on open/close/reopen; the job guard below restricts it to real merges.
     pull_request:
-        branches:
-            - main
         types:
             - closed
+        branches:
+            - main
 
     # Allows you to run this workflow manually from the Actions tab
     workflow_dispatch:
@@ -20,71 +20,173 @@ permissions:
     pages: write
     id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Allow only one concurrent run; do not cancel an in-progress run.
 concurrency:
     group: "versioning"
     cancel-in-progress: false
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-    # This workflow contains a single job called "versioning"
     versioning:
         # Only run this job if the pull request was merged
-        if: github.event.pull_request.merged == true
-        # The type of runner that the job will run on
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
         runs-on: ubuntu-latest
 
-        # Steps represent a sequence of tasks that will be executed as part of the job
         steps:
-            # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+            # Check out main so the changelog is read from / written to the branch
+            # the release lands on.
             - name: Checkout
               uses: actions/checkout@v6.0.2
               with:
+                  ref: main
                   fetch-depth: 0
 
-            # Generate version from conventional commits
+            # Generate the next version from the PR's commits. Reading from the PR
+            # head SHA (rather than the branch name) keeps working even after the
+            # source branch is auto-deleted on merge.
             - name: Semver Conventional Commits
               id: semver
               uses: ietf-tools/semver-action@v1.11.0
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
-                  branch: ${{ github.head_ref || github.ref_name }}
+                  branch: ${{ github.event.pull_request.head.sha || github.ref_name }}
 
-            # Create draft release from version
-            - name: Create Draft Release
-              uses: ncipollo/release-action@v1.21.0
-              with:
-                  prerelease: true
-                  draft: false
-                  commit: ${{ github.sha }}
-                  tag: ${{ steps.semver.outputs.next }}
-                  name: ${{ steps.semver.outputs.next }}
-                  body: "*pending*"
-                  token: ${{ secrets.GITHUB_TOKEN }}
-
-            # Generate changelog from updated release
-            - name: Changelog from Conventional Commits
+            # Build a detailed changelog from the PR's individual commits (via the
+            # API), then prepend a new section to CHANGELOG.md.
+            - name: Build changelog from PR commits
               id: changelog
-              uses: requarks/changelog-action@v1.10.3
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@v7
+              env:
+                  NEXT: ${{ steps.semver.outputs.next }}
+                  CURRENT: ${{ steps.semver.outputs.current }}
               with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  tag: ${{ steps.semver.outputs.next }}
+                  script: |
+                      const fs = require('fs');
 
-            #Finalise the release
+                      const pr = context.payload.pull_request;
+                      const { owner, repo } = context.repo;
+                      const repoUrl = `https://github.com/${owner}/${repo}`;
+                      const next = process.env.NEXT;
+                      const current = process.env.CURRENT;
+
+                      // Commit types excluded from the changelog (matches the old
+                      // requarks excludeTypes: build,docs,other,style).
+                      const exclude = ['build', 'docs', 'other', 'style'];
+                      const headings = {
+                        feat: ':sparkles: New Features',
+                        feature: ':sparkles: New Features',
+                        fix: ':bug: Bug Fixes',
+                        bugfix: ':bug: Bug Fixes',
+                        perf: ':zap: Performance Improvements',
+                        refactor: ':recycle: Refactors',
+                        test: ':white_check_mark: Tests',
+                        tests: ':white_check_mark: Tests',
+                        chore: ':wrench: Chores',
+                      };
+                      const order = [
+                        ':sparkles: New Features',
+                        ':bug: Bug Fixes',
+                        ':zap: Performance Improvements',
+                        ':recycle: Refactors',
+                        ':white_check_mark: Tests',
+                        ':wrench: Chores',
+                      ];
+                      const re = /^(\w+)(?:\(([^)]+)\))?(!)?:\s*(.+)$/;
+
+                      const commits = await github.paginate(
+                        github.rest.pulls.listCommits,
+                        { owner, repo, pull_number: pr.number, per_page: 100 }
+                      );
+
+                      const groups = {};
+                      for (const c of commits) {
+                        const subject = c.commit.message.split('\n')[0].trim();
+                        const m = subject.match(re);
+                        if (!m) continue;
+                        const type = m[1].toLowerCase();
+                        if (exclude.includes(type)) continue;
+                        const heading = headings[type];
+                        if (!heading) continue;
+                        const scope = m[2] ? `**${m[2]}**: ` : '';
+                        const desc = m[4].trim();
+                        const sha = c.sha.substring(0, 7);
+                        const commitUrl = `${repoUrl}/commit/${c.sha}`;
+                        const login = c.author && c.author.login;
+                        const authorBody = login ? `@${login}` : c.commit.author.name;
+                        const authorFile = login
+                          ? `[@${login}](https://github.com/${login})`
+                          : c.commit.author.name;
+                        (groups[heading] ||= { body: [], file: [] });
+                        groups[heading].body.push(
+                          `- [\`${sha}\`](${commitUrl}) - ${scope}${desc} *(commit by ${authorBody})*`
+                        );
+                        groups[heading].file.push(
+                          `- [\`${sha}\`](${commitUrl}) - ${scope}${desc} *(commit by ${authorFile})*`
+                        );
+                      }
+
+                      const present = order.filter((h) => groups[h]);
+                      const body = present
+                        .map((h) => `### ${h}\n${groups[h].body.join('\n')}`)
+                        .join('\n\n');
+                      const fileBody = present
+                        .map((h) => `### ${h}\n${groups[h].file.join('\n')}`)
+                        .join('\n\n');
+
+                      // Release body output (empty -> a placeholder line).
+                      core.setOutput('changes', body || '_No user-facing changes._');
+                      core.setOutput('hasChanges', String(present.length > 0));
+
+                      // ---- Prepend a new section to CHANGELOG.md ----
+                      const path = 'CHANGELOG.md';
+                      const intro =
+                        '# Changelog\n' +
+                        'All notable changes to this project will be documented in this file.\n\n' +
+                        'The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),\n' +
+                        'and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n';
+
+                      let existing = fs.existsSync(path)
+                        ? fs.readFileSync(path, 'utf8')
+                        : intro;
+                      if (!existing.startsWith('# Changelog')) {
+                        existing = intro + '\n' + existing;
+                      }
+
+                      const date = new Date().toISOString().slice(0, 10);
+                      const section = `## [${next}] - ${date}\n${fileBody}\n`;
+                      const compare = current
+                        ? `[${next}]: ${repoUrl}/compare/${current}...${next}\n`
+                        : `[${next}]: ${repoUrl}/releases/tag/${next}\n`;
+                      const block = `\n${section}\n${compare}`;
+
+                      const marker = '\n## [';
+                      const idx = existing.indexOf(marker);
+                      const updated =
+                        idx === -1
+                          ? existing.replace(/\s*$/, '\n') + block
+                          : existing.slice(0, idx + 1) + block.slice(1) + '\n' + existing.slice(idx + 1);
+
+                      fs.writeFileSync(path, updated);
+
+            # Create the GitHub release, tagged on the commit that actually landed
+            # on main (the squash commit) so the tag stays on main's history.
             - name: Create Release
+              if: github.event_name == 'pull_request'
               uses: ncipollo/release-action@v1.21.0
               with:
                   allowUpdates: true
                   draft: false
                   makeLatest: true
+                  commit: ${{ github.event.pull_request.merge_commit_sha }}
                   tag: ${{ steps.semver.outputs.next }}
                   name: ${{ steps.semver.outputs.next }}
                   body: ${{ steps.changelog.outputs.changes }}
                   token: ${{ secrets.GITHUB_TOKEN }}
 
-            # Make a commit for the changelog
+            # Commit the updated CHANGELOG.md back to main. [skip ci] keeps this
+            # push from re-triggering anything.
             - name: Git Auto Commit
+              if: github.event_name == 'pull_request'
               uses: stefanzweifel/git-auto-commit-action@v7.1.0
               with:
                   branch: main
