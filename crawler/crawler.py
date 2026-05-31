@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 
 import requests
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -92,15 +93,14 @@ def fetch_xml(url: str) -> str | None:
     return None
 
 
-def find_sitemap(base_url: str) -> tuple[str | None, str | None]:
+def find_sitemap(base_url: str) -> str | None:
     """Try common sitemap locations until one returns sitemap XML.
 
     Args:
         base_url (str): Outlet root URL.
 
     Returns:
-        tuple[str | None, str | None]: The sitemap (url, xml), or (None, None)
-            if none of the candidate locations returned sitemap XML.
+        str | None: The sitemap XML, or None if none of the candidate locations returned sitemap XML.
 
     """
     for path in SITEMAP_CANDIDATES:
@@ -108,6 +108,31 @@ def find_sitemap(base_url: str) -> tuple[str | None, str | None]:
         xml = fetch_xml(url)
         if xml:
             logger.info('sitemap found: %s', url)
-            return url, xml
+            return xml
         time.sleep(INTER_REQUEST_DELAY)
-    return None, None
+    return None
+
+
+def parse_sitemap(xml: str) -> list[str]:
+    """Extract the <loc> URLs from a sitemap or a sitemap index.
+
+    Args:
+        xml (str): Raw sitemap XML.
+
+    Returns:
+        list[str]: The <loc> URLs (sub-sitemap URLs or article URLs).
+
+    """
+    soup = BeautifulSoup(xml, 'xml')
+    return [loc.text.strip() for loc in soup.find_all('loc')]
+
+
+# ---------- COLLECT ----------
+def collect(outlet: Outlet):
+
+    top_xml = find_sitemap(outlet.base_url)
+    if not top_xml:
+        logger.error('no sitemap for %s at standard locations', outlet.slug)
+        return []
+    top_urls = parse_sitemap(top_xml)
+    return top_urls
