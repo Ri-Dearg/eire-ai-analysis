@@ -32,6 +32,7 @@ INTER_REQUEST_DELAY = 0.5
 
 # Standard sitemap locations to try, in order (same as the probe).
 SITEMAP_CANDIDATES = (
+    '/sitemap_index.xml',
     '/sitemap.xml',
     '/sitemaps/sitemap.xml',
     '/sitemap-index/44-google_sitemap.xml',
@@ -43,6 +44,13 @@ SITEMAP_CANDIDATES = (
 HTTP_OK = 200
 
 CHATGPT_RELEASE = date(2022, 11, 30)
+
+# RETRIES
+# Retry transient failures: transport errors + these HTTP statuses.
+MAX_RETRIES = 3
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+PAUSE_BASE = 2.0
+PAUSE_CAP = 30.0
 
 # Publication date embedded in a URL path: /YYYY/MMDD/.
 _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
@@ -64,7 +72,7 @@ class Article:
     Attributes:
         url (str): The article URL as found in the sitemap.
         clean_url (str): Lightly normalised URL used to prevent duplicates.
-        Authoritative canonicalisation happens in raw_scraper.
+            Authoritative canonicalisation happens in raw_scraper.
         pub_date (date): Publication date.
         period (str): 'pre' or 'post', relative to the ChatGPT release.
 
@@ -114,17 +122,29 @@ def _fetch_xml(url: str) -> str | None:
 
     """
     # Run through URls and get the XML. Log issues.
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
-    except requests.RequestException:
-        logger.warning('fetch failed: %s', url)
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException:
+            if attempt == MAX_RETRIES:
+                logger.warning('fetch failed after %d retries: %s', MAX_RETRIES, url)
+                return None
+            wait = min(PAUSE_BASE * 2**attempt, PAUSE_CAP)
+            logger.info('transport error, retrying in %.1fs: %s', wait, url)
+            time.sleep(wait)
+            continue
+        if resp.status_code != HTTP_OK:
+            if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
+                wait = min(PAUSE_BASE * 2**attempt, PAUSE_CAP)
+                logger.info('%d at %s, retrying in %.1fs', resp.status_code, url, wait)
+                time.sleep(wait)
+                continue
+            logger.warning('Non-OK status code %d found at %s', resp.status_code, url)
+            return None
+        if '<urlset' in resp.text or '<sitemapindex' in resp.text:
+            logger.info('XML found at %s', url)
+            return resp.text
         return None
-    if resp.status_code != HTTP_OK:
-        logger.warning('Non-OK status code %d found at %s', resp.status_code, url)
-        return None
-    if '<urlset' in resp.text or '<sitemapindex' in resp.text:
-        logger.info('XML found at %s', url)
-        return resp.text
     return None
 
 
@@ -163,7 +183,7 @@ def _parse_sitemap(xml: str) -> list[str]:
     return [loc.text.strip() for loc in soup.find_all('loc')]
 
 
-# ---------- SORT ----------
+# ---------- Organise ----------
 def _clean_url(url: str) -> str:
     """Return a cleaned version of the URL for deduplication.
 
@@ -221,7 +241,7 @@ def urls_to_articles(
     Args:
         locs (Iterable[str]): URLs from a sitemap.
         outlet (Outlet): Outlet configuration for filtering and dating.
-        captured (set[str]): Clean keys already taken.
+        captured (set[str]): Clean keys already taken. Mutated in place.
 
     Returns:
         list[Article]: New articles found in these URLs.
@@ -269,7 +289,7 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
     if not top_xml:
         logger.error('no sitemap for %s at standard locations', outlet.slug)
         return []
-    # Parse the top-level sitemap and separate direct article links from sub-sitemap links.
+    # Parse the top-level sitemap, separate direct article links from sub-sitemap links.
     top_urls = _parse_sitemap(top_xml)
     sub_urls = [url for url in top_urls if url.endswith('.xml')]
     direct_links = [url for url in top_urls if not url.endswith('.xml')]
@@ -288,10 +308,10 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
         sub_urls = sub_urls[:max_sub_sitemaps]
 
     total = len(sub_urls)
-
+    if total:
+        logger.info('Sub-sitemaps found.')
     # Loop through sub-sitemaps, fetch and parse them, and extract urls.
     for i, sitemap_url in enumerate(sub_urls, 1):
-        logger.info('Sub-sitemaps found.')
         time.sleep(INTER_REQUEST_DELAY)
         xml = _fetch_xml(sitemap_url)
         if not xml:
