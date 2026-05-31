@@ -128,11 +128,26 @@ def parse_sitemap(xml: str) -> list[str]:
 
 
 # ---------- COLLECT ----------
-def collect(outlet: Outlet):
+def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
 
     top_xml = find_sitemap(outlet.base_url)
     if not top_xml:
         logger.error('no sitemap for %s at standard locations', outlet.slug)
         return []
     top_urls = parse_sitemap(top_xml)
-    return top_urls
+    sub_urls = [url for url in top_urls if url.endswith('.xml')]
+    direct_links = [url for url in top_urls if not url.endswith('.xml')]
+
+    if max_sub_sitemaps is not None:
+        sub_urls = sub_urls[:max_sub_sitemaps]
+
+    total = len(sub_urls)
+
+    for i, sm_url in enumerate(sub_urls, 1):
+        time.sleep(INTER_REQUEST_DELAY)
+        xml = fetch_xml(sm_url)
+        if not xml:
+            logger.warning('%d/%d failed: %s', i, total, sm_url)
+            continue
+        return parse_sitemap(xml)
+    return None
