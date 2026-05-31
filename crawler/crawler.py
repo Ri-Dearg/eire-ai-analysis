@@ -35,7 +35,6 @@ INTER_REQUEST_DELAY = 0.5
 
 # Standard sitemap locations to try, in order (same as the probe).
 SITEMAP_CANDIDATES = (
-    '/sitemap_index.xml',
     '/sitemap.xml',
     '/sitemaps/sitemap.xml',
     '/sitemap-index/44-google_sitemap.xml',
@@ -247,8 +246,20 @@ def urls_to_articles(
 
 
 # ---------- COLLECT ----------
-def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
+def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article]:
+    """Walk every sitemap and return all cleaned, dated articles.
 
+    Distinguishes between top-level sitemaps with direct article links and sub-sitemaps.
+
+    Args:
+        outlet (Outlet): Outlet to collect.
+        max_sub_sitemaps (int | None, optional): Cap on sub-sitemaps
+            followed. Defaults to None (unlimited).
+
+    Returns:
+        list[Article]: All articles collected for the outlet.
+
+    """
     top_xml = _find_sitemap(outlet.base_url)
     if not top_xml:
         logger.error('no sitemap for %s at standard locations', outlet.slug)
@@ -260,12 +271,17 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
     captured_urls: set[str] = set()
     articles: list[Article] = []
 
+    if direct_links:
+        logger.info('Direct article links found in top-level sitemap.')
+        articles.extend(urls_to_articles(direct_links, outlet, captured_urls))
+
     if max_sub_sitemaps is not None:
         sub_urls = sub_urls[:max_sub_sitemaps]
 
     total = len(sub_urls)
 
     for i, sitemap_url in enumerate(sub_urls, 1):
+        logger.info('Sub-sitemaps found.')
         time.sleep(INTER_REQUEST_DELAY)
         xml = _fetch_xml(sitemap_url)
         if not xml:
@@ -277,6 +293,3 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
 
     logger.info('collected %d articles for %s', len(articles), outlet.slug)
     return articles
-
-
-collect(OUTLETS['rte'], max_sub_sitemaps=2)
