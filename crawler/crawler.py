@@ -113,6 +113,7 @@ def _fetch_xml(url: str) -> str | None:
         str | None: Response body if it is sitemap XML, else None.
 
     """
+    # Run through URls and get the XML. Log issues.
     try:
         resp = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     except requests.RequestException:
@@ -137,6 +138,7 @@ def _find_sitemap(base_url: str) -> str | None:
         str | None: The sitemap XML, or None if no sitemap XML.
 
     """
+    # Run through candidate sitemap paths.
     for path in SITEMAP_CANDIDATES:
         url = base_url.rstrip('/') + path
         xml = _fetch_xml(url)
@@ -185,6 +187,7 @@ def _date_from_url(loc: str) -> date | None:
         date | None: Parsed publication date.
 
     """
+    # Use regex to find the date segments in the URL.
     date_string = _URL_DATE_RE.search(loc)
     if not date_string:
         return None
@@ -211,14 +214,14 @@ def _is_article(url: str, outlet: Outlet) -> bool:
 def urls_to_articles(
     locs: Iterable[str],
     outlet: Outlet,
-    seen: set[str],
+    captured: set[str],
 ) -> list[Article]:
     """Filter sitemap URLs down to dated, cleaned articles.
 
     Args:
         locs (Iterable[str]): URLs from a sitemap.
         outlet (Outlet): Outlet configuration for filtering and dating.
-        seen (set[str]): Clean keys already taken.
+        captured (set[str]): Clean keys already taken.
 
     Returns:
         list[Article]: New articles found in these URLs.
@@ -226,16 +229,20 @@ def urls_to_articles(
     """
     output_articles: list[Article] = []
     for loc in locs:
+        # Check if the URL is an article.
         if not _is_article(loc, outlet):
             continue
+        # Clean the URL and check for duplicates.
         clean_url = _clean_url(loc)
-        if clean_url in seen:
+        if clean_url in captured:
             continue
+        # Extract the publication date from the URL.
         pub = _date_from_url(loc)
         if pub is None:
             continue
-        seen.add(clean_url)
+        captured.add(clean_url)
         period = 'pre' if pub < CHATGPT_RELEASE else 'post'
+        # Add the article to the output list.
         output_articles.append(
             Article(url=loc, clean_url=clean_url, pub_date=pub, period=period)
         )
