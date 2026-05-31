@@ -17,11 +17,6 @@ from bs4 import BeautifulSoup
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    datefmt='%H:%M:%S',
-)
 logger = logging.getLogger(__name__)
 
 # ---------- CONFIG ----------
@@ -320,12 +315,12 @@ def write_outputs(
         sample, key=lambda article: (article.pub_date, article.url), reverse=True
     )
 
-    txt_path = out_dir / f'{outlet_slug}_sample.txt'
+    txt_path = out_dir / f'{outlet_slug}_inventory.txt'
     txt_path.write_text(
         '\n'.join(article.url for article in ordered) + '\n', encoding='utf-8'
     )
 
-    csv_path = out_dir / f'{outlet_slug}_sample.csv'
+    csv_path = out_dir / f'{outlet_slug}_inventory.csv'
     with csv_path.open('w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         writer.writerow(('url', 'published_date', 'year', 'period'))
@@ -342,8 +337,13 @@ def write_outputs(
     return txt_path, csv_path
 
 
-article_urls = collect(OUTLETS['rte'], max_sub_sitemaps=2)
+if __name__ == '__main__':
+    article_urls = collect(OUTLETS['rte'])
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
 
-
-txt_file, csv_file = write_outputs(article_urls, 'rte', '.')
-logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
+    txt_file, csv_file = write_outputs(article_urls, 'rte', './data/')
+    logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
