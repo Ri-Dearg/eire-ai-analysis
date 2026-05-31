@@ -4,6 +4,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import date
 
 import requests
 from bs4 import BeautifulSoup
@@ -34,6 +35,9 @@ SITEMAP_CANDIDATES = (
 # HTTP status that counts as a successful fetch.
 HTTP_OK = 200
 
+# Publication date embedded in a URL path: /YYYY/MMDD/.
+_URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
+
 
 @dataclass(frozen=True)
 class Outlet:
@@ -60,6 +64,7 @@ class Outlet:
 _RTE_NEWS_RE = re.compile(
     r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
 )
+
 OUTLETS: dict[str, Outlet] = {
     'rte': Outlet(
         slug='rte',
@@ -142,6 +147,25 @@ def _clean_url(url: str) -> str:
     return url.strip().split('#', 1)[0].rstrip('/')
 
 
+def _date_from_url(loc: str) -> date | None:
+    """Extract the publication date from a URL path.
+
+    Args:
+        loc (str): Article URL.
+
+    Returns:
+        date | None: Parsed publication date.
+
+    """
+    date_string = _URL_DATE_RE.search(loc)
+    if not date_string:
+        return None
+    try:
+        return date(int(date_string[1]), int(date_string[2]), int(date_string[3]))
+    except ValueError:
+        return None
+
+
 def _is_article(url: str, outlet: Outlet) -> bool:
     """Decide whether a URL is a sampleable.
 
@@ -182,7 +206,8 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
         print(xml_urls)
         for url in xml_urls:
             if _is_article(url, outlet):
-                print(_clean_url(url))
+                clean_url = _clean_url(url)
+                print(_date_from_url(url), clean_url)
 
     return None
 
