@@ -1,7 +1,9 @@
 """WIP."""
 
 import logging
+import re
 import time
+from dataclasses import dataclass
 
 import requests
 
@@ -30,6 +32,23 @@ SITEMAP_CANDIDATES = (
 
 # HTTP status that counts as a successful fetch.
 HTTP_OK = 200
+
+
+@dataclass(frozen=True)
+class Outlet:
+    """Configuration for outlet details.
+
+    Attributes:
+        slug (str): DB outlet name, passed to ingest(outlet_name=...).
+        base_url (str): Outlet root used to locate the sitemap.
+        article_re (re.Pattern[str]): A URL must match this to count as a
+            sampleable article.
+
+    """
+
+    slug: str
+    base_url: str
+    article_re: re.Pattern[str]
 
 
 # ---------- FETCH / PARSE ----------
