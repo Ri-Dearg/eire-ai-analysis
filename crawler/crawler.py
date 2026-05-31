@@ -264,26 +264,32 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
         list[Article]: All articles collected for the outlet.
 
     """
+    # Find the top-level sitemap XML.
     top_xml = _find_sitemap(outlet.base_url)
     if not top_xml:
         logger.error('no sitemap for %s at standard locations', outlet.slug)
         return []
+    # Parse the top-level sitemap and separate direct article links from sub-sitemap links.
     top_urls = _parse_sitemap(top_xml)
     sub_urls = [url for url in top_urls if url.endswith('.xml')]
     direct_links = [url for url in top_urls if not url.endswith('.xml')]
 
+    # Set up the article list and the captured URL set.
     captured_urls: set[str] = set()
     articles: list[Article] = []
 
+    # Process any direct article links in the top-level sitemap.
     if direct_links:
         logger.info('Direct article links found in top-level sitemap.')
         articles.extend(urls_to_articles(direct_links, outlet, captured_urls))
 
+    # Process sub-sitemaps, with an optional cap.
     if max_sub_sitemaps is not None:
         sub_urls = sub_urls[:max_sub_sitemaps]
 
     total = len(sub_urls)
 
+    # Loop through sub-sitemaps, fetch and parse them, and extract urls.
     for i, sitemap_url in enumerate(sub_urls, 1):
         logger.info('Sub-sitemaps found.')
         time.sleep(INTER_REQUEST_DELAY)
@@ -301,14 +307,14 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
 
 # ---------- OUTPUT ----------
 def write_outputs(
-    sample: Sequence[Article],
+    article_url_list: Sequence[Article],
     outlet_slug: str,
     out_dir: str | Path,
 ) -> tuple[Path, Path]:
     """Write the URL list (.txt) and the .csv.
 
     Args:
-        sample (Sequence[Article]): Articles to write.
+        article_url_list (Sequence[Article]): Articles to write.
         outlet_slug (str): Outlet slug used in the output filenames.
         out_dir (str | Path): Directory to write into; created if needed.
 
@@ -316,17 +322,23 @@ def write_outputs(
         tuple[Path, Path]: Paths to the written (txt, csv) files.
 
     """
+    # Make the output directory if it doesn't exist.
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Sort the urls by publication date.
     ordered = sorted(
-        sample, key=lambda article: (article.pub_date, article.url), reverse=True
+        article_url_list,
+        key=lambda article: (article.pub_date, article.url),
+        reverse=True,
     )
 
+    # Write the .txt file with one URL per line.
     txt_path = out_dir / f'{outlet_slug}_inventory.txt'
     txt_path.write_text(
         '\n'.join(article.url for article in ordered) + '\n', encoding='utf-8'
     )
 
+    # Write the .csv file with columns.
     csv_path = out_dir / f'{outlet_slug}_inventory.csv'
     with csv_path.open('w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
@@ -345,12 +357,12 @@ def write_outputs(
 
 
 if __name__ == '__main__':
-    article_urls = collect(OUTLETS['rte'])
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(message)s',
         datefmt='%H:%M:%S',
     )
 
+    article_urls = collect(OUTLETS['rte'])
     txt_file, csv_file = write_outputs(article_urls, 'rte', './data/')
     logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
