@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import csv
 import logging
 import re
 import time
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import requests
 from bs4 import BeautifulSoup
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
 logging.basicConfig(
     level=logging.INFO,
@@ -137,7 +139,7 @@ def _find_sitemap(base_url: str) -> str | None:
         base_url (str): Outlet root URL.
 
     Returns:
-        str | None: The sitemap XML, or None if none of the candidate locations returned sitemap XML.
+        str | None: The sitemap XML, or None if no sitemap XML.
 
     """
     for path in SITEMAP_CANDIDATES:
@@ -293,3 +295,55 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
 
     logger.info('collected %d articles for %s', len(articles), outlet.slug)
     return articles
+
+
+# ---------- OUTPUT ----------
+def write_outputs(
+    sample: Sequence[Article],
+    outlet_slug: str,
+    out_dir: str | Path,
+) -> tuple[Path, Path]:
+    """Write the URL list (.txt) and the .csv.
+
+    Args:
+        sample (Sequence[Article]): Articles to write.
+        outlet_slug (str): Outlet slug used in the output filenames.
+        out_dir (str | Path): Directory to write into; created if needed.
+
+    Returns:
+        tuple[Path, Path]: Paths to the written (txt, csv) files.
+
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ordered = sorted(
+        sample, key=lambda article: (article.pub_date, article.url), reverse=True
+    )
+
+    txt_path = out_dir / f'{outlet_slug}_sample.txt'
+    txt_path.write_text(
+        '\n'.join(article.url for article in ordered) + '\n', encoding='utf-8'
+    )
+
+    csv_path = out_dir / f'{outlet_slug}_sample.csv'
+    with csv_path.open('w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(('url', 'published_date', 'year', 'period'))
+        for article in ordered:
+            writer.writerow(
+                (
+                    article.url,
+                    article.pub_date.isoformat(),
+                    article.pub_date.year,
+                    article.period,
+                )
+            )
+
+    return txt_path, csv_path
+
+
+article_urls = collect(OUTLETS['rte'], max_sub_sitemaps=2)
+
+
+txt_file, csv_file = write_outputs(article_urls, 'rte', '.')
+logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
