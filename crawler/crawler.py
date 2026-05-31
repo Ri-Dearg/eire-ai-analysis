@@ -15,6 +15,11 @@ from bs4 import BeautifulSoup
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%H:%M:%S',
+)
 logger = logging.getLogger(__name__)
 
 # ---------- CONFIG ----------
@@ -260,16 +265,18 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
 
     total = len(sub_urls)
 
-    for i, sm_url in enumerate(sub_urls, 1):
+    for i, sitemap_url in enumerate(sub_urls, 1):
         time.sleep(INTER_REQUEST_DELAY)
-        xml = _fetch_xml(sm_url)
+        xml = _fetch_xml(sitemap_url)
         if not xml:
-            logger.warning('%d/%d failed: %s', i, total, sm_url)
+            logger.warning('%d/%d failed: %s', i, total, sitemap_url)
             continue
         found = urls_to_articles(_parse_sitemap(xml), outlet, captured_urls)
         articles.extend(found)
+        logger.info('%d/%d %s: +%d articles', i, total, sitemap_url, len(found))
 
-    return print(articles)
+    logger.info('collected %d articles for %s', len(articles), outlet.slug)
+    return articles
 
 
 collect(OUTLETS['rte'], max_sub_sitemaps=2)
