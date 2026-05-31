@@ -1,13 +1,19 @@
 """WIP."""
 
+from __future__ import annotations
+
 import logging
 import re
 import time
 from dataclasses import dataclass
 from datetime import date
+from typing import TYPE_CHECKING
 
 import requests
 from bs4 import BeautifulSoup
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +41,8 @@ SITEMAP_CANDIDATES = (
 # HTTP status that counts as a successful fetch.
 HTTP_OK = 200
 
+CHATGPT_RELEASE = date(2022, 11, 30)
+
 # Publication date embedded in a URL path: /YYYY/MMDD/.
 _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
 
@@ -47,30 +55,22 @@ _RTE_NEWS_RE = re.compile(
     r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
 )
 
-OUTLETS: dict[str, Outlet] = {
-    'rte': Outlet(
-        slug='rte',
-        base_url='https://www.rte.ie',
-        article_re=_RTE_NEWS_RE,
-    ),
-}
-
 
 @dataclass(frozen=True)
 class Article:
-    """A single sampleable article and its sampling metadata.
+    """A single sampleable article and its data.
 
     Attributes:
-        url (str): The article URL as found in the sitemap (passed to ingest()).
-        dedup_key (str): Lightly normalised URL used to collapse in-sample
-            duplicates. Authoritative canonicalisation happens in raw_scraper.
+        url (str): The article URL as found in the sitemap.
+        clean_url (str): Lightly normalised URL used to prevent duplicates.
+        Authoritative canonicalisation happens in raw_scraper.
         pub_date (date): Publication date.
         period (str): 'pre' or 'post', relative to the ChatGPT release.
 
     """
 
     url: str
-    dedup_key: str
+    clean_url: str
     pub_date: date
     period: str
 
@@ -90,6 +90,15 @@ class Outlet:
     slug: str
     base_url: str
     article_re: re.Pattern[str]
+
+
+OUTLETS: dict[str, Outlet] = {
+    'rte': Outlet(
+        slug='rte',
+        base_url='https://www.rte.ie',
+        article_re=_RTE_NEWS_RE,
+    ),
+}
 
 
 # ---------- FETCH / PARSE ----------
@@ -198,6 +207,40 @@ def _is_article(url: str, outlet: Outlet) -> bool:
     return outlet.article_re.match(url) is not None
 
 
+def urls_to_articles(
+    locs: Iterable[str],
+    outlet: Outlet,
+    seen: set[str],
+) -> list[Article]:
+    """Filter sitemap URLs down to dated, cleaned articles.
+
+    Args:
+        locs (Iterable[str]): URLs from a sitemap.
+        outlet (Outlet): Outlet configuration for filtering and dating.
+        seen (set[str]): Clean keys already taken.
+
+    Returns:
+        list[Article]: New articles found in these URLs.
+
+    """
+    output_articles: list[Article] = []
+    for loc in locs:
+        if not _is_article(loc, outlet):
+            continue
+        clean_url = _clean_url(loc)
+        if clean_url in seen:
+            continue
+        pub = _date_from_url(loc)
+        if pub is None:
+            continue
+        seen.add(clean_url)
+        period = 'pre' if pub < CHATGPT_RELEASE else 'post'
+        output_articles.append(
+            Article(url=loc, clean_url=clean_url, pub_date=pub, period=period)
+        )
+    return output_articles
+
+
 # ---------- COLLECT ----------
 def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
 
@@ -208,6 +251,9 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
     top_urls = _parse_sitemap(top_xml)
     sub_urls = [url for url in top_urls if url.endswith('.xml')]
     direct_links = [url for url in top_urls if not url.endswith('.xml')]
+
+    captured_urls: set[str] = set()
+    articles: list[Article] = []
 
     if max_sub_sitemaps is not None:
         sub_urls = sub_urls[:max_sub_sitemaps]
@@ -220,14 +266,10 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None):
         if not xml:
             logger.warning('%d/%d failed: %s', i, total, sm_url)
             continue
-        xml_urls = _parse_sitemap(xml)
-        print(xml_urls)
-        for url in xml_urls:
-            if _is_article(url, outlet):
-                clean_url = _clean_url(url)
-                print(_date_from_url(url), clean_url)
+        found = urls_to_articles(_parse_sitemap(xml), outlet, captured_urls)
+        articles.extend(found)
 
-    return None
+    return print(articles)
 
 
 collect(OUTLETS['rte'], max_sub_sitemaps=2)
