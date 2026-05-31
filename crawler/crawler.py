@@ -38,24 +38,6 @@ HTTP_OK = 200
 # Publication date embedded in a URL path: /YYYY/MMDD/.
 _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
 
-
-@dataclass(frozen=True)
-class Outlet:
-    """Configuration for outlet details.
-
-    Attributes:
-        slug (str): DB outlet name, passed to ingest(outlet_name=...).
-        base_url (str): Outlet root used to locate the sitemap.
-        article_re (re.Pattern[str]): A URL must match this to count as a
-            sampleable article.
-
-    """
-
-    slug: str
-    base_url: str
-    article_re: re.Pattern[str]
-
-
 # RTE news articles take two URL shapes, both of which we want:
 # news/business/2026/0331/1566044-...
 # no category, e.g. /news/2026/0330/1565927-...
@@ -72,6 +54,42 @@ OUTLETS: dict[str, Outlet] = {
         article_re=_RTE_NEWS_RE,
     ),
 }
+
+
+@dataclass(frozen=True)
+class Article:
+    """A single sampleable article and its sampling metadata.
+
+    Attributes:
+        url (str): The article URL as found in the sitemap (passed to ingest()).
+        dedup_key (str): Lightly normalised URL used to collapse in-sample
+            duplicates. Authoritative canonicalisation happens in raw_scraper.
+        pub_date (date): Publication date.
+        period (str): 'pre' or 'post', relative to the ChatGPT release.
+
+    """
+
+    url: str
+    dedup_key: str
+    pub_date: date
+    period: str
+
+
+@dataclass(frozen=True)
+class Outlet:
+    """Configuration for outlet details.
+
+    Attributes:
+        slug (str): DB outlet name, passed to ingest(outlet_name=...).
+        base_url (str): Outlet root used to locate the sitemap.
+        article_re (re.Pattern[str]): A URL must match this to count as a
+            sampleable article.
+
+    """
+
+    slug: str
+    base_url: str
+    article_re: re.Pattern[str]
 
 
 # ---------- FETCH / PARSE ----------
