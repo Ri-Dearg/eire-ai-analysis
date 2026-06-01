@@ -56,6 +56,7 @@ PAUSE_CAP = 30.0
 SUB_SITEMAP_INCLUDE = {
     'rte': None,
     'gript': re.compile(r'/post-sitemap\d*\.xml$'),
+    'the_liberal': re.compile(r'/wp-sitemap-posts-post-\d+\.xml$'),
 }
 
 # Publication date embedded in a URL path: /YYYY/MMDD/.
@@ -124,6 +125,12 @@ OUTLETS: dict[str, Outlet] = {
     'gript': Outlet(
         slug='gript',
         base_url='https://gript.ie',
+        date_source='lastmod',
+        article_re=None,
+    ),
+    'the_liberal': Outlet(
+        slug='the_liberal',
+        base_url='https://theliberal.ie',
         date_source='lastmod',
         article_re=None,
     ),
@@ -445,6 +452,6 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S',
     )
 
-    article_urls = collect(OUTLETS['gript'])
-    txt_file, csv_file = write_outputs(article_urls, 'gript', './data/')
+    article_urls = collect(OUTLETS['the_liberal'])
+    txt_file, csv_file = write_outputs(article_urls, 'the_liberal', './data/')
     logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
