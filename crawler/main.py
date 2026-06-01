@@ -223,6 +223,24 @@ def _clean_url(url: str) -> str:
     return url.strip().split('#', 1)[0].rstrip('/')
 
 
+def date_from_lastmod(lastmod: str) -> date | None:
+    """Parse a sitemap <lastmod> value into a date.
+
+    Args:
+        lastmod (str): The <lastmod> string (may be empty).
+
+    Returns:
+        date | None: Parsed date, or None if absent or invalid.
+
+    """
+    if len(lastmod) < len('YYYY-MM-DD'):
+        return None
+    try:
+        return date(int(lastmod[:4]), int(lastmod[5:7]), int(lastmod[8:10]))
+    except ValueError:
+        return None
+
+
 def _date_from_url(loc: str) -> date | None:
     """Extract the publication date from a URL path.
 
