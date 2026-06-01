@@ -54,9 +54,10 @@ PAUSE_CAP = 30.0
 
 # SITE SETTINGS
 SUB_SITEMAP_INCLUDE = {
-    'rte': None,
     'gript': re.compile(r'/post-sitemap\d*\.xml$'),
+    'irish_examiner': re.compile(r'/sitemap/44-\d{4}-\d+-\d+\.xml$'),
     'the_liberal': re.compile(r'/wp-sitemap-posts-post-\d+\.xml$'),
+    'rte': None,
 }
 
 # Publication date embedded in a URL path: /YYYY/MMDD/.
@@ -69,6 +70,10 @@ _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
 # /sport/, /radio/, /entertainment/, /lifestyle/, /culture/, /brainstorm/ etc.
 _RTE_NEWS_RE = re.compile(
     r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
+)
+
+_EXAMINER_ARTICLE_RE = re.compile(
+    r'^https?://(?:www\.)?irishexaminer\.com/(?:[^/]+/)+arid-\d+\.html$'
 )
 
 # Non-article wordpress URL segments to exclude.
@@ -116,17 +121,23 @@ class Outlet:
 
 
 OUTLETS: dict[str, Outlet] = {
+    'gript': Outlet(
+        slug='gript',
+        base_url='https://gript.ie',
+        date_source='lastmod',
+        article_re=None,
+    ),
     'rte': Outlet(
         slug='rte',
         base_url='https://www.rte.ie',
         date_source='url',
         article_re=_RTE_NEWS_RE,
     ),
-    'gript': Outlet(
-        slug='gript',
-        base_url='https://gript.ie',
+    'irish_examiner': Outlet(
+        slug='irish_examiner',
+        base_url='https://www.irishexaminer.com',
         date_source='lastmod',
-        article_re=None,
+        article_re=_EXAMINER_ARTICLE_RE,
     ),
     'the_liberal': Outlet(
         slug='the_liberal',
@@ -452,6 +463,6 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S',
     )
 
-    article_urls = collect(OUTLETS['the_liberal'])
-    txt_file, csv_file = write_outputs(article_urls, 'the_liberal', './data/')
+    article_urls = collect(OUTLETS['irish_examiner'])
+    txt_file, csv_file = write_outputs(article_urls, 'irish_examiner', './data/')
     logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
