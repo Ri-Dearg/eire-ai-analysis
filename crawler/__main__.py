@@ -1,4 +1,4 @@
-"""WIP."""
+"""Functions to crawl sitemaps, extract article URLs with publication dates."""
 
 from __future__ import annotations
 
@@ -52,6 +52,12 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 PAUSE_BASE = 2.0
 PAUSE_CAP = 30.0
 
+# SITE SETTINGS
+SUB_SITEMAP_INCLUDE = {
+    'rte': None,
+    'gript': re.compile(r'/post-sitemap\d*\.xml$'),
+}
+
 # Publication date embedded in a URL path: /YYYY/MMDD/.
 _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
 
@@ -62,6 +68,12 @@ _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
 # /sport/, /radio/, /entertainment/, /lifestyle/, /culture/, /brainstorm/ etc.
 _RTE_NEWS_RE = re.compile(
     r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
+)
+
+# Non-article wordpress URL segments to exclude.
+_NON_ARTICLE_RE = re.compile(
+    r'/(category|tag|author|page|wp-content|wp-includes|feed|comments|'
+    r'about|contact|privacy|terms|advertise|subscribe|topic|section)/'
 )
 
 
@@ -98,14 +110,22 @@ class Outlet:
 
     slug: str
     base_url: str
-    article_re: re.Pattern[str]
+    date_source: str
+    article_re: re.Pattern[str] | None = None
 
 
 OUTLETS: dict[str, Outlet] = {
     'rte': Outlet(
         slug='rte',
         base_url='https://www.rte.ie',
+        date_source='url',
         article_re=_RTE_NEWS_RE,
+    ),
+    'gript': Outlet(
+        slug='gript',
+        base_url='https://gript.ie',
+        date_source='lastmod',
+        article_re=None,
     ),
 }
 
@@ -169,21 +189,33 @@ def _find_sitemap(base_url: str) -> str | None:
     return None
 
 
-def _parse_sitemap(xml: str) -> list[str]:
+def _parse_sitemap(xml: str) -> list[dict[str, str]]:
     """Extract the <loc> URLs from a sitemap or a sitemap index.
 
     Args:
         xml (str): Raw sitemap XML.
 
     Returns:
-        list[str]: The <loc> URLs (sub-sitemap URLs or article URLs).
+        list[dict[str, str]]: The <loc> and <lastmod> values.
 
     """
     soup = BeautifulSoup(xml, 'xml')
-    return [loc.text.strip() for loc in soup.find_all('loc')]
+    xml_keys: list[dict[str, str]] = []
+    for element in soup.find_all(['url', 'sitemap']):
+        loc = element.find('loc')
+        if not loc:
+            continue
+        lastmod = element.find('lastmod')
+        xml_keys.append(
+            {
+                'loc': loc.text.strip(),
+                'lastmod': lastmod.text.strip() if lastmod else '',
+            }
+        )
+    return xml_keys
 
 
-# ---------- Organise ----------
+# ---------- ORGANISE ----------
 def _clean_url(url: str) -> str:
     """Return a cleaned version of the URL for deduplication.
 
@@ -195,6 +227,24 @@ def _clean_url(url: str) -> str:
 
     """
     return url.strip().split('#', 1)[0].rstrip('/')
+
+
+def date_from_lastmod(lastmod: str) -> date | None:
+    """Parse a sitemap <lastmod> value into a date.
+
+    Args:
+        lastmod (str): The <lastmod> string (may be empty).
+
+    Returns:
+        date | None: Parsed date, or None if absent or invalid.
+
+    """
+    if len(lastmod) < len('YYYY-MM-DD'):
+        return None
+    try:
+        return date(int(lastmod[:4]), int(lastmod[5:7]), int(lastmod[8:10]))
+    except ValueError:
+        return None
 
 
 def _date_from_url(loc: str) -> date | None:
@@ -228,18 +278,20 @@ def _is_article(url: str, outlet: Outlet) -> bool:
         bool: True if the URL should be sampled.
 
     """
-    return outlet.article_re.match(url) is not None
+    if outlet.article_re is not None:
+        return outlet.article_re.match(url) is not None
+    return _NON_ARTICLE_RE.search(url) is None
 
 
-def urls_to_articles(
-    locs: Iterable[str],
+def _urls_to_articles(
+    entries: list[dict[str, str]],
     outlet: Outlet,
     captured: set[str],
 ) -> list[Article]:
     """Filter sitemap URLs down to dated, cleaned articles.
 
     Args:
-        locs (Iterable[str]): URLs from a sitemap.
+        entries (list[dict[str, str]]): Parsed sitemap entries.
         outlet (Outlet): Outlet configuration for filtering and dating.
         captured (set[str]): Clean keys already taken. Mutated in place.
 
@@ -248,7 +300,8 @@ def urls_to_articles(
 
     """
     output_articles: list[Article] = []
-    for loc in locs:
+    for entry in entries:
+        loc = entry['loc']
         # Check if the URL is an article.
         if not _is_article(loc, outlet):
             continue
@@ -257,7 +310,10 @@ def urls_to_articles(
         if clean_url in captured:
             continue
         # Extract the publication date from the URL.
-        pub = _date_from_url(loc)
+        if outlet.date_source == 'url':
+            pub = _date_from_url(loc)
+        else:
+            pub = date_from_lastmod(entry.get('lastmod', ''))
         if pub is None:
             continue
         captured.add(clean_url)
@@ -290,18 +346,24 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
         logger.error('no sitemap for %s at standard locations', outlet.slug)
         return []
     # Parse the top-level sitemap, separate direct article links from sub-sitemap links.
-    top_urls = _parse_sitemap(top_xml)
+    top_entries = _parse_sitemap(top_xml)
+    top_urls = [entry['loc'] for entry in top_entries]
     sub_urls = [url for url in top_urls if url.endswith('.xml')]
-    direct_links = [url for url in top_urls if not url.endswith('.xml')]
+    direct_entries = [entry for entry in top_entries if not entry['loc'].endswith('.xml')]
+
+    # Filter sitemaps by regex if necessary.
+    include = SUB_SITEMAP_INCLUDE.get(outlet.slug)
+    if include is not None:
+        sub_urls = [url for url in sub_urls if include.search(url)]
 
     # Set up the article list and the captured URL set.
     captured_urls: set[str] = set()
     articles: list[Article] = []
 
     # Process any direct article links in the top-level sitemap.
-    if direct_links:
+    if direct_entries:
         logger.info('Direct article links found in top-level sitemap.')
-        articles.extend(urls_to_articles(direct_links, outlet, captured_urls))
+        articles.extend(_urls_to_articles(direct_entries, outlet, captured_urls))
 
     # Process sub-sitemaps, with an optional cap.
     if max_sub_sitemaps is not None:
@@ -317,7 +379,7 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
         if not xml:
             logger.warning('%d/%d failed: %s', i, total, sitemap_url)
             continue
-        found = urls_to_articles(_parse_sitemap(xml), outlet, captured_urls)
+        found = _urls_to_articles(_parse_sitemap(xml), outlet, captured_urls)
         articles.extend(found)
         logger.info('%d/%d %s: +%d articles', i, total, sitemap_url, len(found))
 
@@ -383,6 +445,6 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S',
     )
 
-    article_urls = collect(OUTLETS['rte'])
-    txt_file, csv_file = write_outputs(article_urls, 'rte', './data/')
+    article_urls = collect(OUTLETS['gript'])
+    txt_file, csv_file = write_outputs(article_urls, 'gript', './data/')
     logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
