@@ -52,6 +52,12 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 PAUSE_BASE = 2.0
 PAUSE_CAP = 30.0
 
+# SITE SETTINGS
+SUB_SITEMAP_INCLUDE = {
+    'rte': None,  # None = follow all sub-sitemaps (current RTE behaviour)
+    'gript': re.compile(r'/post-sitemap\d*\.xml$'),  # only post-sitemaps
+}
+
 # Publication date embedded in a URL path: /YYYY/MMDD/.
 _URL_DATE_RE = re.compile(r'/(\d{4})/(\d{2})(\d{2})/')
 
@@ -98,14 +104,22 @@ class Outlet:
 
     slug: str
     base_url: str
-    article_re: re.Pattern[str]
+    date_source: str
+    article_re: re.Pattern[str] | None = None
 
 
 OUTLETS: dict[str, Outlet] = {
     'rte': Outlet(
         slug='rte',
         base_url='https://www.rte.ie',
+        date_source='url',
         article_re=_RTE_NEWS_RE,
+    ),
+    'gript': Outlet(
+        slug='gript',
+        base_url='https://gript.ie',
+        date_source='lastmod',
+        article_re=None,
     ),
 }
 
@@ -169,21 +183,33 @@ def _find_sitemap(base_url: str) -> str | None:
     return None
 
 
-def _parse_sitemap(xml: str) -> list[str]:
+def _parse_sitemap(xml: str) -> list[dict[str, str]]:
     """Extract the <loc> URLs from a sitemap or a sitemap index.
 
     Args:
         xml (str): Raw sitemap XML.
 
     Returns:
-        list[str]: The <loc> URLs (sub-sitemap URLs or article URLs).
+        list[dict[str, str]]: The <loc> and <lastmod> values.
 
     """
     soup = BeautifulSoup(xml, 'xml')
-    return [loc.text.strip() for loc in soup.find_all('loc')]
+    xml_keys: list[dict[str, str]] = []
+    for element in soup.find_all(['url', 'sitemap']):
+        loc = element.find('loc')
+        if not loc:
+            continue
+        lastmod = element.find('lastmod')
+        xml_keys.append(
+            {
+                'loc': loc.text.strip(),
+                'lastmod': lastmod.text.strip() if lastmod else '',
+            }
+        )
+    return xml_keys
 
 
-# ---------- Organise ----------
+# ---------- ORGANISE ----------
 def _clean_url(url: str) -> str:
     """Return a cleaned version of the URL for deduplication.
 
