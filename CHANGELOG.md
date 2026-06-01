@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.7.0] - 2026-06-01
+### :sparkles: New Features
+- [`becacb2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/becacb261c361fff0f610b89d6336fbba5d32ce5) - **crawl**: ✨ add settings for the liberal *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`9505701`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9505701442a9ba1fac783dae22960f48d816349e) - **crawl**: ✨ add settings for examiner *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.7.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.6.0...v0.7.0
+
 ## [v0.6.0] - 2026-06-01
 ### :sparkles: New Features
 - [`17b54d3`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/17b54d36ae1d2664d3a5b1a0ad500d2cc9871055) - **crawl**: 🚧 add gript variant settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
