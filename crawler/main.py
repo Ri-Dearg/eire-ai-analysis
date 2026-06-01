@@ -54,8 +54,8 @@ PAUSE_CAP = 30.0
 
 # SITE SETTINGS
 SUB_SITEMAP_INCLUDE = {
-    'rte': None,  # None = follow all sub-sitemaps (current RTE behaviour)
-    'gript': re.compile(r'/post-sitemap\d*\.xml$'),  # only post-sitemaps
+    'rte': None,
+    'gript': re.compile(r'/post-sitemap\d*\.xml$'),
 }
 
 # Publication date embedded in a URL path: /YYYY/MMDD/.
@@ -346,18 +346,24 @@ def collect(outlet: Outlet, max_sub_sitemaps: int | None = None) -> list[Article
         logger.error('no sitemap for %s at standard locations', outlet.slug)
         return []
     # Parse the top-level sitemap, separate direct article links from sub-sitemap links.
-    top_urls = _parse_sitemap(top_xml)
+    top_entries = _parse_sitemap(top_xml)
+    top_urls = [entry['loc'] for entry in top_entries]
     sub_urls = [url for url in top_urls if url.endswith('.xml')]
-    direct_links = [url for url in top_urls if not url.endswith('.xml')]
+    direct_entries = [entry for entry in top_entries if not entry['loc'].endswith('.xml')]
+
+    # Filter sitemaps by regex if necessary.
+    include = SUB_SITEMAP_INCLUDE.get(outlet.slug)
+    if include is not None:
+        sub_urls = [url for url in sub_urls if include.search(url)]
 
     # Set up the article list and the captured URL set.
     captured_urls: set[str] = set()
     articles: list[Article] = []
 
     # Process any direct article links in the top-level sitemap.
-    if direct_links:
+    if direct_entries:
         logger.info('Direct article links found in top-level sitemap.')
-        articles.extend(_urls_to_articles(direct_links, outlet, captured_urls))
+        articles.extend(_urls_to_articles(direct_entries, outlet, captured_urls))
 
     # Process sub-sitemaps, with an optional cap.
     if max_sub_sitemaps is not None:
@@ -439,6 +445,6 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S',
     )
 
-    article_urls = collect(OUTLETS['rte'])
-    txt_file, csv_file = write_outputs(article_urls, 'rte', './data/')
+    article_urls = collect(OUTLETS['gript'])
+    txt_file, csv_file = write_outputs(article_urls, 'gript', './data/')
     logger.info('wrote %s (%d urls) and %s', txt_file, len(article_urls), csv_file)
