@@ -70,6 +70,11 @@ _RTE_NEWS_RE = re.compile(
     r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
 )
 
+_NON_ARTICLE_RE = re.compile(
+    r'/(category|tag|author|page|wp-content|wp-includes|feed|comments|'
+    r'about|contact|privacy|terms|advertise|subscribe|topic|section)/'
+)
+
 
 @dataclass(frozen=True)
 class Article:
@@ -272,7 +277,9 @@ def _is_article(url: str, outlet: Outlet) -> bool:
         bool: True if the URL should be sampled.
 
     """
-    return outlet.article_re.match(url) is not None
+    if outlet.article_re is not None:
+        return outlet.article_re.match(url) is not None
+    return _NON_ARTICLE_RE.search(url) is None
 
 
 def _urls_to_articles(
