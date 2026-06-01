@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.6.0] - 2026-06-01
+### :sparkles: New Features
+- [`17b54d3`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/17b54d36ae1d2664d3a5b1a0ad500d2cc9871055) - **crawl**: 🚧 add gript variant settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`305490a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/305490ac601f6a05c3dca5634997f3022c8ee44c) - **crawl**: 🚧 Extract date from lastmod *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`14f4586`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/14f4586d56b5ca6df1d631942c33c4e67a40e719) - **crawl**: 🚧 ad regex settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`37efbc0`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/37efbc0ea90ee889034f9e99615bced18c9eca07) - **crawl**: 🚧 edit url collect to for lastmod *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`ab0fe57`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ab0fe5782c50eec5c3c3fbad8ad23ee21af2fd20) - **crawl**: ✨ collect gript data *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :wrench: Chores
+- [`bfeb8b4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bfeb8b4c76e997d7b419a13a1fae0ca53af277f3) - **crawl**: 💡 add comments and init.py *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`fbf4950`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/fbf4950a329fa05dc1adbbd5a4d9e20a4976916d) - **crawl**: 🚚 rename module main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3035b23`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/3035b23749a097ab9f2e0da5de887040b5cb2533) - **scrape**: 🚚 rename module *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.6.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.5.0...v0.6.0
+
 ## [v0.5.0] - 2026-05-31
 ### :sparkles: New Features
 - [`f73e246`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/f73e246e389f6744fd8a0c4686417a94b41019db) - **crawl**: ✨ set up global variables *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
