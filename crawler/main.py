@@ -70,6 +70,7 @@ _RTE_NEWS_RE = re.compile(
     r'^https?://(?:www\.)?rte\.ie/news/(?!nuacht/)(?:[^/]+/)?\d{4}/\d{4}/\d+'
 )
 
+# Non-article wordpress URL segments to exclude.
 _NON_ARTICLE_RE = re.compile(
     r'/(category|tag|author|page|wp-content|wp-includes|feed|comments|'
     r'about|contact|privacy|terms|advertise|subscribe|topic|section)/'
@@ -283,14 +284,14 @@ def _is_article(url: str, outlet: Outlet) -> bool:
 
 
 def _urls_to_articles(
-    locs: Iterable[str],
+    entries: list[dict[str, str]],
     outlet: Outlet,
     captured: set[str],
 ) -> list[Article]:
     """Filter sitemap URLs down to dated, cleaned articles.
 
     Args:
-        locs (Iterable[str]): URLs from a sitemap.
+        entries (list[dict[str, str]]): Parsed sitemap entries.
         outlet (Outlet): Outlet configuration for filtering and dating.
         captured (set[str]): Clean keys already taken. Mutated in place.
 
@@ -299,7 +300,8 @@ def _urls_to_articles(
 
     """
     output_articles: list[Article] = []
-    for loc in locs:
+    for entry in entries:
+        loc = entry['loc']
         # Check if the URL is an article.
         if not _is_article(loc, outlet):
             continue
@@ -308,7 +310,10 @@ def _urls_to_articles(
         if clean_url in captured:
             continue
         # Extract the publication date from the URL.
-        pub = _date_from_url(loc)
+        if outlet.date_source == 'url':
+            pub = _date_from_url(loc)
+        else:
+            pub = date_from_lastmod(entry.get('lastmod', ''))
         if pub is None:
             continue
         captured.add(clean_url)
