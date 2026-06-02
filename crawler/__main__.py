@@ -2,7 +2,7 @@
 
 import logging
 
-from crawler.crawler import main
+from .crawler import main
 
 logger = logging.getLogger(__name__)
 
