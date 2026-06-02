@@ -318,6 +318,25 @@ def append_sampled_log(
     return log_path
 
 
+# ---------- SUMMARY ----------
+def _summarise(slug: str, final_sample: Sequence[Article]) -> None:
+    """Log the sample's pre/post totals and per-year counts.
+
+    Args:
+        slug (str): Outlet slug, for the log line.
+        final_sample (Sequence[Article]): The drawn sample.
+
+    """
+    pre = sum(article.period == 'pre' for article in final_sample)
+    post = sum(article.period == 'post' for article in final_sample)
+    logger.info('%s: %d total (%d pre, %d post)', slug, len(final_sample), pre, post)
+    by_year: dict[int, int] = {}
+    for article in final_sample:
+        by_year[article.pub_date.year] = by_year.get(article.pub_date.year, 0) + 1
+    for year in sorted(by_year):
+        logger.info('  %d: %d', year, by_year[year])
+
+
 def sample(outlet: OutletConfig, data_dir: Path) -> None:
     slug = outlet.slug
     inventory = load_inventory(data_dir / f'{slug}_inventory.csv')
@@ -354,8 +373,18 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
 
     final_sample = pre_sample + post_sample
 
-    write_sample(final_sample, slug, data_dir)
-    append_sampled_log(final_sample, slug, data_dir)
+    txt_file, csv_file = write_sample(final_sample, slug, data_dir)
+    log_file = append_sampled_log(final_sample, slug, data_dir)
+    _summarise(slug, final_sample)
+
+    logger.info(
+        '%s: wrote %s (%d urls), %s, and updated %s',
+        slug,
+        txt_file,
+        len(final_sample),
+        csv_file,
+        log_file,
+    )
 
 
 sample(OUTLETS['rte'], DATA_DIR)
