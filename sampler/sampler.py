@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 # ---------- CONFIG ----------
 DATA_DIR = Path('./data')
 
-PRE_GPT_NO = 5
-POST_GPT_NO = 5
+PRE_GPT_NO = 100
+POST_GPT_NO = 100
 
 # Select years for sampling.
 # (Gript starts 2019).
@@ -151,7 +151,7 @@ def _stratify_by_month(
             total += 1
             by_month[article.pub_date.isoformat()[:7]].append(article)
     logger.info(
-        '%s: %d monthly strata after category filter, year filter',
+        '%s: %d monthly strata after year selection',
         OUTLETS['rte'].slug,
         len(by_month),
     )
@@ -229,22 +229,85 @@ def sample_stratified(
     for month in sorted(monthly_samples):
         bucket = sorted(monthly_samples[month], key=lambda article: article.url)
         selected_articles.extend(seeded_rng.sample(bucket, monthly_distribution[month]))
-    print(selected_articles)
     return selected_articles
 
 
-def sample(outlet_slug: str, data_dir: Path) -> None:
-    inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
-    filtered = filter_candidates(inventory, OUTLETS['rte'], set())
+# ---------- OUTPUT ----------
+def write_sample(
+    sample: Sequence[Article],
+    slug: str,
+    out_dir: str | Path,
+) -> tuple[Path, Path]:
+    """Write the sample URL list (.txt), (.csv).
+
+    Args:
+        sample (Sequence[Article]): Sampled articles.
+        slug (str): Outlet slug used in the output filenames.
+        out_dir (str | Path): Directory to write into; created if needed.
+
+    Returns:
+        tuple[Path, Path]: Paths to the written (txt, csv) files.
+
+    """
+    output_dir = Path(out_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ordered = sorted(
+        sample,
+        key=lambda article: (article.pub_date, article.url),
+        reverse=True,
+    )
+
+    txt_path = output_dir / f'{slug}_sample.txt'
+    txt_path.write_text(
+        '\n'.join(article.url for article in ordered) + '\n', encoding='utf-8'
+    )
+
+    csv_path = output_dir / f'{slug}_sample.csv'
+    with csv_path.open('w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(('url', 'published_date', 'year', 'period'))
+        for article in ordered:
+            writer.writerow(
+                (
+                    article.url,
+                    article.pub_date.isoformat(),
+                    article.pub_date.year,
+                    article.period,
+                )
+            )
+
+    return txt_path, csv_path
+
+
+def sample(outlet: OutletConfig, data_dir: Path) -> None:
+    slug = outlet.slug
+    inventory = load_inventory(data_dir / f'{slug}_inventory.csv')
+    filtered = filter_candidates(inventory, outlet, set())
+    logger.info(
+        '%s: %d articles after category filter',
+        outlet.slug,
+        len(filtered),
+    )
+
     seeded_rng = random.Random(SEED)
-    final_sample = sample_stratified(
+    pre_sample = sample_stratified(
         filtered,
         PRE_YEARS,
         PRE_GPT_NO,
         seeded_rng,
         'pre',
     )
-    print(final_sample)
+    post_sample = sample_stratified(
+        filtered,
+        POST_YEARS,
+        POST_GPT_NO,
+        seeded_rng,
+        'post',
+    )
+
+    final_sample = pre_sample + post_sample
+
+    write_sample(final_sample, slug, data_dir)
 
 
-sample(OUTLETS['rte'].slug, DATA_DIR)
+sample(OUTLETS['rte'], DATA_DIR)
