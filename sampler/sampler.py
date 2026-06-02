@@ -42,7 +42,41 @@ SEED = 37
 # ---------- OUTLET SETTINGS ----------
 # ----- RTE: category is the segment after /news/--
 _RTE_CATEGORY_RE = re.compile(r'/news/([^/]+)/')
+# Sport, business, and weather-summary are formulaic match/market register.
 RTE_EXCLUDE = frozenset({'business', 'weather-summary'})
+
+# ----- Irish Examiner: category is the first path segment -----
+_EXAMINER_CATEGORY_RE = re.compile(r'https?://[^/]+/([^/]+)/')
+# Sport and business (incl. columnist variants) are formulaic match/market
+# register; property mixes editorial features with templated estate-agent
+# listings that can't be split by URL; the rest are sponsored/staging.
+EXAMINER_EXCLUDE = frozenset(
+    {
+        'sport',
+        'sport-columnists',
+        'sport-columnists-gaa',
+        'sport-columnists-golf',
+        'sport-columnists-racing',
+        'sport-columnists-rugby',
+        'sport-columnists-soccer',
+        'business',
+        'business-columnists',
+        'property',
+        'sponsored',
+        'sponsored-showcase',
+        'special-reports',
+        'competition',
+        'morningbriefing',
+        'nfytest',
+        'iectrial2',
+        'iectrial3',
+        'xml',
+        'pages',
+        'podcasts-app',
+        'puzzles',
+        'others',
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -80,9 +114,44 @@ def _rte_category(url: str) -> str:
     return 'no-category' if category.isdigit() else category
 
 
+def _examiner_category(url: str) -> str:
+    """Read the Irish Examiner section from a URL.
+
+    Args:
+        url (str): Article URL.
+
+    Returns:
+        str: The first path segment, or 'no-category' if none.
+
+    """
+    match = _EXAMINER_CATEGORY_RE.match(url)
+    return match.group(1) if match else 'no-category'
+
+
+def _keep_all(_url: str) -> str:
+    """Category reader for flat-slug outlets (Gript, The Liberal).
+
+    They have no category segment and an empty exclude set, so every URL maps to
+    one constant bucket that is never excluded.
+
+    Args:
+        _url (str): Article URL (unused).
+
+    Returns:
+        str: The constant 'article'.
+
+    """
+    return 'article'
+
+
 # Configuration for each outlet for regex url matching.
 OUTLETS: dict[str, OutletConfig] = {
+    'gript': OutletConfig('gript', _keep_all),
+    'irish_examiner': OutletConfig(
+        'irish_examiner', _examiner_category, EXAMINER_EXCLUDE
+    ),
     'rte': OutletConfig('rte', _rte_category, RTE_EXCLUDE),
+    'the_liberal': OutletConfig('the_liberal', _keep_all),
 }
 
 
