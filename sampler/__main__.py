@@ -1,8 +1,8 @@
-"""Main file to execute crawler. Edit parameters as needed."""
+"""Sample the inventory for each outlet to get a final set of articles for analysis."""
 
 import logging
 
-from .crawler import main
+from .sampler import main
 
 logger = logging.getLogger(__name__)
 
