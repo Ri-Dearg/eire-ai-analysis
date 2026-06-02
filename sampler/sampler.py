@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import random
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -26,18 +27,20 @@ if TYPE_CHECKING:
 # ---------- CONFIG ----------
 DATA_DIR = Path('./data')
 
-PRE_GPT_NO = 4000
-POST_GPT_NO = 4000
+PRE_GPT_NO = 5
+POST_GPT_NO = 5
 
 # Select years for sampling.
 # (Gript starts 2019).
 PRE_YEARS = range(2019, 2023)  # 2019-2022
-POST_YEARS = range(2025, 2027)  # 2023-2026
+POST_YEARS = range(2025, 2027)
+
+SEED = 37
 
 # ---------- OUTLET SETTINGS ----------
 # ----- RTE: category is the segment after /news/--
 _RTE_CATEGORY_RE = re.compile(r'/news/([^/]+)/')
-RTE_EXCLUDE = frozenset({'business', 'weather-summary'})  # wire-fed / templated
+RTE_EXCLUDE = frozenset({'business', 'weather-summary'})
 
 
 @dataclass(frozen=True)
@@ -191,13 +194,57 @@ def _spread(total_wanted: int, available_articles: dict[str, int]) -> dict[str, 
     return article_collection
 
 
+def sample_stratified(
+    articles: Sequence[Article],
+    years: range,
+    total_wanted: int,
+    seeded_rng: random.Random,
+    label: str,
+) -> list[Article]:
+    """Sample articles spread evenly across year-month strata.
+
+    Args:
+        articles (Sequence[Article]): Candidates for one period.
+        years (range): Inclusive year window to sample from.
+        total_wanted (int): Number of articles to draw.
+        seeded_rng (random.Random): Seeded RNG, for a reproducible draw.
+        label (str): Period label, for the short-pool warning.
+
+    Returns:
+        list[Article]: The drawn articles for this period.
+
+    """
+    monthly_samples = _stratify_by_month(articles, years)
+    available_articles = sum(len(bucket) for bucket in monthly_samples.values())
+    if available_articles < total_wanted:
+        logger.warning(
+            '%s: only %d articles available, wanted %d',
+            label,
+            available_articles,
+            total_wanted,
+        )
+    monthly_counts = {month: len(articles) for month, articles in monthly_samples.items()}
+    monthly_distribution = _spread(total_wanted, monthly_counts)
+    selected_articles: list[Article] = []
+    for month in sorted(monthly_samples):
+        bucket = sorted(monthly_samples[month], key=lambda article: article.url)
+        selected_articles.extend(seeded_rng.sample(bucket, monthly_distribution[month]))
+    print(selected_articles)
+    return selected_articles
+
+
 def sample(outlet_slug: str, data_dir: Path) -> None:
     inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
     filtered = filter_candidates(inventory, OUTLETS['rte'], set())
-    monthly_samples = _stratify_by_month(filtered, POST_YEARS)
-    monthly_counts = {month: len(articles) for month, articles in monthly_samples.items()}
-    sample_distribution = _spread(POST_GPT_NO, monthly_counts)
-    print(sample_distribution)
+    seeded_rng = random.Random(SEED)
+    final_sample = sample_stratified(
+        filtered,
+        PRE_YEARS,
+        PRE_GPT_NO,
+        seeded_rng,
+        'pre',
+    )
+    print(final_sample)
 
 
 sample(OUTLETS['rte'].slug, DATA_DIR)
