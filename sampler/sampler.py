@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # ---------- CONFIG ----------
 DATA_DIR = Path('./data')
 
+# No of articles to sample from each period.
 PRE_GPT_NO = 100
 POST_GPT_NO = 100
 
@@ -35,6 +36,7 @@ POST_GPT_NO = 100
 PRE_YEARS = range(2019, 2023)  # 2019-2022
 POST_YEARS = range(2025, 2027)
 
+# RNG seed for a reproducible sample across runs.
 SEED = 37
 
 # ---------- OUTLET SETTINGS ----------
@@ -70,6 +72,7 @@ def _rte_category(url: str) -> str:
             (real news) URL form.
 
     """
+    # Regex match for rte url categories
     match = _RTE_CATEGORY_RE.search(url)
     if not match:
         return 'no-category'
@@ -77,6 +80,7 @@ def _rte_category(url: str) -> str:
     return 'no-category' if category.isdigit() else category
 
 
+# Configuration for each outlet for regex url matching.
 OUTLETS: dict[str, OutletConfig] = {
     'rte': OutletConfig('rte', _rte_category, RTE_EXCLUDE),
 }
@@ -138,6 +142,7 @@ def filter_candidates(
         list[Article]: Eligible candidates for this run.
 
     """
+    # Filter out articles in excluded categories, and any URL already sampled.
     return [
         article
         for article in articles
@@ -161,10 +166,9 @@ def _stratify_by_month(
 
     """
     by_month: dict[str, list[Article]] = defaultdict(list)
-    total = 0
+    # Loop through articles, putting them into year-months.
     for article in articles:
         if article.pub_date.year in years:
-            total += 1
             by_month[article.pub_date.isoformat()[:7]].append(article)
     logger.info(
         '%s: %d monthly strata after year selection',
@@ -187,16 +191,21 @@ def _spread(total_wanted: int, available_articles: dict[str, int]) -> dict[str, 
 
     """
     article_collection = dict.fromkeys(available_articles, 0)
+    # Remaining picks to allocate, updated each loop.
     remaining = min(total_wanted, sum(available_articles.values()))
+    # Loop through the months, giving each an even share.
     while remaining > 0:
         active_months = [
             month
             for month in available_articles
             if available_articles[month] - article_collection[month] > 0
         ]
+        # If no active months, we can't allocate any more.
         if not active_months:
             break
+        # Give each active month an even share of the remaining picks.
         article_per_month = max(1, remaining // len(active_months))
+        # Loop through active months in a fixed order, giving each its share.
         for month in sorted(active_months):
             if remaining == 0:
                 break
@@ -205,6 +214,7 @@ def _spread(total_wanted: int, available_articles: dict[str, int]) -> dict[str, 
                 available_articles[month] - article_collection[month],
                 remaining,
             )
+            # Update the collection and remaining picks.
             article_collection[month] += give
             remaining -= give
     return article_collection
@@ -230,8 +240,10 @@ def sample_stratified(
         list[Article]: The drawn articles for this period.
 
     """
+    # Group articles into year-month buckets, and count availability.
     monthly_samples = _stratify_by_month(articles, years)
     available_articles = sum(len(bucket) for bucket in monthly_samples.values())
+    # Warn if we can't fill the requested total.
     if available_articles < total_wanted:
         logger.warning(
             '%s: only %d articles available, wanted %d',
@@ -239,9 +251,11 @@ def sample_stratified(
             available_articles,
             total_wanted,
         )
+    # Allocate the total across months as evenly as possible.
     monthly_counts = {month: len(articles) for month, articles in monthly_samples.items()}
     monthly_distribution = _spread(total_wanted, monthly_counts)
     selected_articles: list[Article] = []
+    # Loop through the months in a fixed order, sampling from each as allocated.
     for month in sorted(monthly_samples):
         bucket = sorted(monthly_samples[month], key=lambda article: article.url)
         selected_articles.extend(seeded_rng.sample(bucket, monthly_distribution[month]))
@@ -267,17 +281,19 @@ def write_sample(
     """
     output_dir = Path(out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Sort the sample by publication date (newest first).
     ordered = sorted(
         final_sample,
         key=lambda article: (article.pub_date, article.url),
         reverse=True,
     )
-
+    # Write the sample URLs to a .txt file, one per line.
     txt_path = output_dir / f'{slug}_sample.txt'
     txt_path.write_text(
         '\n'.join(article.url for article in ordered) + '\n', encoding='utf-8'
     )
 
+    # Write the sample metadata to a .csv file, one article per row.
     csv_path = output_dir / f'{slug}_sample.csv'
     with csv_path.open('w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
@@ -327,10 +343,12 @@ def _summarise(slug: str, final_sample: Sequence[Article]) -> None:
         final_sample (Sequence[Article]): The drawn sample.
 
     """
+    # Log the pre/post totals, and count per year.
     pre = sum(article.period == 'pre' for article in final_sample)
     post = sum(article.period == 'post' for article in final_sample)
     logger.info('%s: %d total (%d pre, %d post)', slug, len(final_sample), pre, post)
     by_year: dict[int, int] = {}
+    # Loop through the sample, counting articles per publication year.
     for article in final_sample:
         by_year[article.pub_date.year] = by_year.get(article.pub_date.year, 0) + 1
     for year in sorted(by_year):
@@ -338,7 +356,15 @@ def _summarise(slug: str, final_sample: Sequence[Article]) -> None:
 
 
 def sample(outlet: OutletConfig, data_dir: Path) -> None:
+    """Load, filter, stratify-sample, and write outputs for one outlet.
+
+    Args:
+        outlet (Outlet): Outlet to sample.
+        data_dir (Path): Directory holding the inventory, log, and outputs.
+
+    """
     slug = outlet.slug
+    # Load the inventory and already-sampled URLs.
     inventory = load_inventory(data_dir / f'{slug}_inventory.csv')
     already_sampled = load_sampled_log(data_dir / f'{slug}_sampled.log')
     logger.info(
@@ -348,6 +374,7 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
         len(already_sampled),
     )
 
+    # Filter the inventory to get options.
     filtered = filter_candidates(inventory, outlet, already_sampled)
     logger.info(
         '%s: %d articles after category filter and sampled exclusion',
@@ -355,7 +382,9 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
         len(filtered),
     )
 
+    # Use a seeded RNG for a reproducible sample across runs.
     seeded_rng = random.Random(SEED)
+    # Sample from the filtered options.
     pre_sample = sample_stratified(
         filtered,
         PRE_YEARS,
@@ -373,6 +402,7 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
 
     final_sample = pre_sample + post_sample
 
+    # Write the sample outputs and update the log.
     txt_file, csv_file = write_sample(final_sample, slug, data_dir)
     log_file = append_sampled_log(final_sample, slug, data_dir)
     _summarise(slug, final_sample)
@@ -385,6 +415,3 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
         csv_file,
         log_file,
     )
-
-
-sample(OUTLETS['rte'], DATA_DIR)
