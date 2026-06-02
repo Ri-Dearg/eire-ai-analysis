@@ -26,13 +26,13 @@ if TYPE_CHECKING:
 # ---------- CONFIG ----------
 DATA_DIR = Path('./data')
 
-PRE_GPT_NO = 1000
-POST_GPT_NO = 1000
+PRE_GPT_NO = 4000
+POST_GPT_NO = 4000
 
 # Select years for sampling.
 # (Gript starts 2019).
 PRE_YEARS = range(2019, 2023)  # 2019-2022
-POST_YEARS = range(2023, 2027)  # 2023-2026
+POST_YEARS = range(2025, 2027)  # 2023-2026
 
 # ---------- OUTLET SETTINGS ----------
 # ----- RTE: category is the segment after /news/--
@@ -148,7 +148,7 @@ def _stratify_by_month(
             total += 1
             by_month[article.pub_date.isoformat()[:7]].append(article)
     logger.info(
-        '%s: %d monthly strata after category filter and sampled-log',
+        '%s: %d monthly strata after category filter, year filter',
         OUTLETS['rte'].slug,
         len(by_month),
     )
@@ -156,10 +156,48 @@ def _stratify_by_month(
 
 
 # ---------- SAMPLE ----------
+def _spread(total_wanted: int, available_articles: dict[str, int]) -> dict[str, int]:
+    """Spread a total across strata as evenly as availability allows.
+
+    Args:
+        total_wanted (int): Number of picks to allocate.
+        available_articles (dict[str, int]): Available count per stratum key.
+
+    Returns:
+        dict[str, int]: Picks allocated per stratum key.
+
+    """
+    article_collection = dict.fromkeys(available_articles, 0)
+    remaining = min(total_wanted, sum(available_articles.values()))
+    while remaining > 0:
+        active_months = [
+            month
+            for month in available_articles
+            if available_articles[month] - article_collection[month] > 0
+        ]
+        if not active_months:
+            break
+        article_per_month = max(1, remaining // len(active_months))
+        for month in sorted(active_months):
+            if remaining == 0:
+                break
+            give = min(
+                article_per_month,
+                available_articles[month] - article_collection[month],
+                remaining,
+            )
+            article_collection[month] += give
+            remaining -= give
+    return article_collection
+
+
 def sample(outlet_slug: str, data_dir: Path) -> None:
     inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
     filtered = filter_candidates(inventory, OUTLETS['rte'], set())
     monthly_samples = _stratify_by_month(filtered, POST_YEARS)
+    monthly_counts = {month: len(articles) for month, articles in monthly_samples.items()}
+    sample_distribution = _spread(POST_GPT_NO, monthly_counts)
+    print(sample_distribution)
 
 
 sample(OUTLETS['rte'].slug, DATA_DIR)
