@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -19,6 +20,11 @@ DATA_DIR = Path('./data')
 
 PRE_GPT_NO = 1000
 POST_GPT_NO = 1000
+
+# Select years for sampling.
+# (Gript starts 2019).
+PRE_YEARS = range(2019, 2023)  # 2019-2022
+POST_YEARS = range(2023, 2027)  # 2023-2026
 
 # ---------- OUTLET SETTINGS ----------
 # ----- RTE: category is the segment after /news/--
@@ -113,6 +119,27 @@ def filter_candidates(
     ]
 
 
+def _stratify_by_month(
+    articles: Sequence[Article],
+    years: range,
+) -> dict[str, list[Article]]:
+    """Group articles within a year window into year-month strata.
+
+    Args:
+        articles (Sequence[Article]): Candidate articles for one period.
+        years (range): Inclusive year window to keep.
+
+    Returns:
+        dict[str, list[Article]]: Articles keyed by 'YYYY-MM'.
+
+    """
+    by_month: dict[str, list[Article]] = defaultdict(list)
+    for article in articles:
+        if article.pub_date.year in years:
+            by_month[article.pub_date.isoformat()[:7]].append(article)
+    return by_month
+
+
 # ---------- SAMPLE ----------
 def sample(outlet_slug: str, data_dir: Path) -> None:
     inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
@@ -123,7 +150,8 @@ def sample(outlet_slug: str, data_dir: Path) -> None:
             'https://www.rte.ie/news/2026/0531/1576112-tomi-reichental/',
         },
     )
-    print(filtered[:10])
+
+    print(_stratify_by_month(filtered, PRE_YEARS))
 
 
 sample(OUTLETS['rte'].slug, DATA_DIR)
