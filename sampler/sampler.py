@@ -235,8 +235,7 @@ def _stratify_by_month(
         if article.pub_date.year in years:
             by_month[article.pub_date.isoformat()[:7]].append(article)
     logger.info(
-        '%s: %d monthly strata after year selection',
-        OUTLETS['rte'].slug,
+        '%d monthly strata after year selection',
         len(by_month),
     )
     return by_month
