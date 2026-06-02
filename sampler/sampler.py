@@ -105,6 +105,22 @@ def load_inventory(csv_path: str | Path) -> list[Article]:
         ]
 
 
+def load_sampled_log(log_path: str | Path) -> set[str]:
+    """Read the set of URLs already sampled in previous runs.
+
+    Args:
+        log_path (str | Path): Path to a ``<slug>_sampled.log``.
+
+    Returns:
+        set[str]: URLs to exclude this run; empty if the log is absent.
+
+    """
+    path = Path(log_path)
+    if not path.exists():
+        return set()
+    return {line for line in path.read_text(encoding='utf-8').splitlines() if line}
+
+
 # ---------- FILTER ----------
 def filter_candidates(
     articles: Sequence[Article],
@@ -234,14 +250,14 @@ def sample_stratified(
 
 # ---------- OUTPUT ----------
 def write_sample(
-    sample: Sequence[Article],
+    final_sample: Sequence[Article],
     slug: str,
     out_dir: str | Path,
 ) -> tuple[Path, Path]:
     """Write the sample URL list (.txt), (.csv).
 
     Args:
-        sample (Sequence[Article]): Sampled articles.
+        final_sample (Sequence[Article]): Sampled articles.
         slug (str): Outlet slug used in the output filenames.
         out_dir (str | Path): Directory to write into; created if needed.
 
@@ -252,7 +268,7 @@ def write_sample(
     output_dir = Path(out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     ordered = sorted(
-        sample,
+        final_sample,
         key=lambda article: (article.pub_date, article.url),
         reverse=True,
     )
@@ -282,11 +298,13 @@ def write_sample(
 def sample(outlet: OutletConfig, data_dir: Path) -> None:
     slug = outlet.slug
     inventory = load_inventory(data_dir / f'{slug}_inventory.csv')
-    filtered = filter_candidates(inventory, outlet, set())
+    already_sampled = load_sampled_log(data_dir / f'{slug}_sampled.log')
+    filtered = filter_candidates(inventory, outlet, already_sampled)
     logger.info(
-        '%s: %d articles after category filter',
-        outlet.slug,
-        len(filtered),
+        '%s: loaded %d inventory articles, %d already sampled',
+        slug,
+        len(inventory),
+        len(already_sampled),
     )
 
     seeded_rng = random.Random(SEED)
