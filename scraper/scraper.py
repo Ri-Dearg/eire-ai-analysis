@@ -12,6 +12,7 @@ import sqlite3
 import time
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib import robotparser
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -20,6 +21,9 @@ import requests
 # LOGGING
 logger = logging.getLogger(__name__)
 
+OUTLET_SAMPLES = ['rte', 'irish_examiner', 'gript', 'the_liberal']
+SOURCE_FEED = 'sitemap'
+DATA_DIR = Path('./data')
 
 # DATABASE
 # Path to DB file.
@@ -343,6 +347,29 @@ def _outlet_id(conn: sqlite3.Connection, name: str) -> int:
     return row[0]
 
 
+# ---------- SAMPLE PROCESSING ----------
+def _read_sample(slug: str, data_dir: Path) -> list[str]:
+    """Read an outlet's sampled URL list (one URL per line).
+
+    Args:
+        slug (str): Outlet slug; names the ``<slug>_sample.txt`` file.
+        data_dir (Path): Directory holding the sample files.
+
+    Returns:
+        list[str]: Non-blank URLs, or an empty list if the file is absent.
+
+    """
+    path = data_dir / f'{slug}_sample.txt'
+    if not path.exists():
+        logger.warning('%s: no sample file at %s', slug, path)
+        return []
+    return [
+        line.strip()
+        for line in path.read_text(encoding='utf-8').splitlines()
+        if line.strip()
+    ]
+
+
 # ---------- MAIN FUNCTION ----------
 def ingest(
     urls: list[str],
@@ -407,3 +434,15 @@ def ingest(
         counts['not_stored'],
     )
     return dict(counts)
+
+
+def main() -> None:
+    """Ingest every outlet in ``OUTLETS`` from its sampled URL list."""
+    for outlet in OUTLET_SAMPLES:
+        urls = _read_sample(outlet, DATA_DIR)
+        if not urls:
+            logger.warning('%s: nothing to ingest, skipping', outlet)
+            continue
+        logger.info('%s: ingesting %d sampled urls', outlet, len(urls))
+        counts = ingest(urls, outlet, SOURCE_FEED)
+        logger.info('%s: %s', outlet, counts)
