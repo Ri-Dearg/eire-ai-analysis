@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.8.0] - 2026-06-02
+### :sparkles: New Features
+- [`c84d611`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c84d61194fc31a4fc029b50899328893171e041f) - **sample**: ✨ add csv load *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`bf5169c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bf5169c1c5ad113e6f709f8f4bb7fda85536117f) - **sample**: 🚧 add OutletConfig, rte settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`e30e77a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/e30e77ae82f3e7ada672d87ebf11c38bc0f129c3) - **sample**: ✨ add sample filter *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`26d1c0a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/26d1c0a9d5a3becfe56292f66abb9291d6758d74) - **sample**: ✨ split articles into months *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`52c8224`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/52c8224f28f465667f792ea5a0160f628d983647) - **sample**: 🚧 monthly split added *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`4ea6ee0`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/4ea6ee0568402ed4fe5034041e29e7b7ce4f8b3c) - **sample**: 🚧 function to distrubute sample *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`1dfd931`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/1dfd93156a3b3dedb13bee858e672c224abafad4) - **sample**: ✨ add func to collect sample dist *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`de5dfdf`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/de5dfdf0978f4f3826b3050256a591a9015b8006) - **sample**: ✨ add write sample func *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`7b23f64`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/7b23f64e485ba3a867828ad80c476974cf58f417) - **sample**: 🚧 add log for sampled urls *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`d49dd1b`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/d49dd1b7bcd91e23cf3e39797a6be2fb45d4e18f) - **sample**: ✨ add url log *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`8f1a46c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/8f1a46c7121e7389d736735877bb45b4c1513c10) - **sample**: ✨ add summary messages *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3f453cd`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/3f453cdae6226d4bea93d99b9b49ba17424f337a) - **sample**: ✨ add config for other outlets *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`33fc73a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/33fc73a79568e5f5f25c502d16b6d1729ce58ef0) - **sample**: ✨ add main to sampler *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`bf56335`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bf5633572d0ffcfb03c33878a6d46c1de32fa6ba) - **scrape**: ✨ add sample processing *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :bug: Bug Fixes
+- [`906f878`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/906f878065d57e6791d397c89bc061e2766bd925) - **crawl**: 🐛 change date source for examiner *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :recycle: Refactors
+- [`c00d8d1`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c00d8d1f24b525f8a6024f0d4045f1914e063c39) - **sample**: 🚚 add _ to functions *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`b08c83b`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/b08c83bb0c51dea31e55667fd2f1d03417a6d3ad) - **crawl**: ⚡️ add main loop for crawler *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :wrench: Chores
+- [`ca09665`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ca0966502ed1606e95df3bf5f5bbd63e4124f199) - **crawl**: 🚚 structure crawler as module *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a13323e`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a13323ec3637fa005a8bf6bf2b491b9f730b207a) - **scrape**: 🚚 structure scraper as module *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.8.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.7.0...v0.8.0
+
 ## [v0.7.0] - 2026-06-01
 ### :sparkles: New Features
 - [`becacb2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/becacb261c361fff0f610b89d6336fbba5d32ce5) - **crawl**: ✨ add settings for the liberal *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
