@@ -14,11 +14,6 @@ from typing import TYPE_CHECKING
 
 from crawler import Article, _clean_url
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    datefmt='%H:%M:%S',
-)
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -484,3 +479,9 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
         csv_file,
         log_file,
     )
+
+
+def main() -> None:
+    """Run the sampling process for each outlet."""
+    for outlet in OUTLETS.values():
+        sample(outlet, DATA_DIR)
