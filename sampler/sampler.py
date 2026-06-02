@@ -295,16 +295,45 @@ def write_sample(
     return txt_path, csv_path
 
 
+def append_sampled_log(
+    final_sample: Sequence[Article],
+    slug: str,
+    output_dir: str | Path,
+) -> Path:
+    """Append this run's URLs to the persistent sampled-log.
+
+    Args:
+        final_sample (Sequence[Article]): Articles drawn this run.
+        slug (str): Outlet slug used in the log filename.
+        output_dir (str | Path): Directory holding the log.
+
+    Returns:
+        Path: Path to the sampled-log.
+
+    """
+    log_path = Path(output_dir) / f'{slug}_sampled.log'
+    with log_path.open('a', encoding='utf-8') as file:
+        for article in final_sample:
+            file.write(article.url + '\n')
+    return log_path
+
+
 def sample(outlet: OutletConfig, data_dir: Path) -> None:
     slug = outlet.slug
     inventory = load_inventory(data_dir / f'{slug}_inventory.csv')
     already_sampled = load_sampled_log(data_dir / f'{slug}_sampled.log')
-    filtered = filter_candidates(inventory, outlet, already_sampled)
     logger.info(
         '%s: loaded %d inventory articles, %d already sampled',
         slug,
         len(inventory),
         len(already_sampled),
+    )
+
+    filtered = filter_candidates(inventory, outlet, already_sampled)
+    logger.info(
+        '%s: %d articles after category filter and sampled exclusion',
+        slug,
+        len(filtered),
     )
 
     seeded_rng = random.Random(SEED)
@@ -326,6 +355,7 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     final_sample = pre_sample + post_sample
 
     write_sample(final_sample, slug, data_dir)
+    append_sampled_log(final_sample, slug, data_dir)
 
 
 sample(OUTLETS['rte'], DATA_DIR)
