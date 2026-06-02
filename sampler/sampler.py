@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -11,6 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from crawler import Article, _clean_url
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%H:%M:%S',
+)
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -134,24 +142,24 @@ def _stratify_by_month(
 
     """
     by_month: dict[str, list[Article]] = defaultdict(list)
+    total = 0
     for article in articles:
         if article.pub_date.year in years:
+            total += 1
             by_month[article.pub_date.isoformat()[:7]].append(article)
+    logger.info(
+        '%s: %d monthly strata after category filter and sampled-log',
+        OUTLETS['rte'].slug,
+        len(by_month),
+    )
     return by_month
 
 
 # ---------- SAMPLE ----------
 def sample(outlet_slug: str, data_dir: Path) -> None:
     inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
-    filtered = filter_candidates(
-        inventory,
-        OUTLETS['rte'],
-        {
-            'https://www.rte.ie/news/2026/0531/1576112-tomi-reichental/',
-        },
-    )
-
-    print(_stratify_by_month(filtered, PRE_YEARS))
+    filtered = filter_candidates(inventory, OUTLETS['rte'], set())
+    monthly_samples = _stratify_by_month(filtered, POST_YEARS)
 
 
 sample(OUTLETS['rte'].slug, DATA_DIR)
