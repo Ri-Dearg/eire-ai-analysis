@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ---------- CONFIG ----------
+
+DATA_DIR = Path('./data')
+
 USER_AGENT = (
     'CapstoneResearchBot/0.1 (HDip Data Analytics, DBS; contact: 20074605@mydbs.ie)'
 )
@@ -458,3 +461,17 @@ def write_outputs(
             )
 
     return txt_path, csv_path
+
+
+def main() -> None:
+    """Execute crawler to collect urls from all outlt sitemaps."""
+    for outlet in OUTLETS.values():
+        article_urls = collect(outlet)
+        txt_file, csv_file = write_outputs(article_urls, outlet.slug, DATA_DIR)
+        logger.info(
+            'wrote %s (%d urls) and %s for %s',
+            txt_file,
+            len(article_urls),
+            csv_file,
+            outlet.slug,
+        )
