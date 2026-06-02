@@ -1,14 +1,68 @@
 """Take a sample of URLs from the sitemap xmls to pass onto the scraper."""
 
+from __future__ import annotations
+
 import csv
+import re
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from crawler import Article, _clean_url
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
 # ---------- CONFIG ----------
+DATA_DIR = Path('./data')
+
 PRE_GPT_NO = 1000
 POST_GPT_NO = 1000
+
+# ---------- OUTLET SETTINGS ----------
+# ----- RTE: category is the segment after /news/--
+_RTE_CATEGORY_RE = re.compile(r'/news/([^/]+)/')
+RTE_EXCLUDE = frozenset({'business', 'weather-summary'})  # wire-fed / templated
+
+
+@dataclass(frozen=True)
+class OutletConfig:
+    """Category reading and exclusions settings.
+
+    Attributes:
+        slug (str): Names the inventory, sample, and log files.
+        category (Callable[[str], str]): Maps an article URL to its category.
+        exclude (frozenset[str]): Categories to drop (empty = keep everything).
+
+    """
+
+    slug: str
+    category: Callable[[str], str]
+    exclude: frozenset[str] = frozenset()
+
+
+def _rte_category(url: str) -> str:
+    """Read the RTE news category from a URL.
+
+    Args:
+        url (str): Article URL.
+
+    Returns:
+        str: Segment after ``/news/``, or 'no-category' for the dateless-segment
+            (real news) URL form.
+
+    """
+    match = _RTE_CATEGORY_RE.search(url)
+    if not match:
+        return 'no-category'
+    category = match.group(1)
+    return 'no-category' if category.isdigit() else category
+
+
+OUTLETS: dict[str, OutletConfig] = {
+    'rte': OutletConfig('rte', _rte_category, RTE_EXCLUDE),
+}
 
 
 # ---------- LOAD ----------
@@ -34,4 +88,11 @@ def load_inventory(csv_path: str | Path) -> list[Article]:
         ]
 
 
-print(load_inventory('data/rte_inventory.csv')[:5])
+# ---------- SAMPLE ----------
+def sample(outlet_slug: str, data_dir: Path) -> None:
+    inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
+
+    print(inventory[:5])
+
+
+sample(OUTLETS['rte'].slug, DATA_DIR)
