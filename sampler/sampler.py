@@ -156,7 +156,7 @@ OUTLETS: dict[str, OutletConfig] = {
 
 
 # ---------- LOAD ----------
-def load_inventory(csv_path: str | Path) -> list[Article]:
+def _load_inventory(csv_path: str | Path) -> list[Article]:
     """Read a crawler inventory CSV into a list of articles.
 
     Args:
@@ -178,7 +178,7 @@ def load_inventory(csv_path: str | Path) -> list[Article]:
         ]
 
 
-def load_sampled_log(log_path: str | Path) -> set[str]:
+def _load_sampled_log(log_path: str | Path) -> set[str]:
     """Read the set of URLs already sampled in previous runs.
 
     Args:
@@ -195,7 +195,7 @@ def load_sampled_log(log_path: str | Path) -> set[str]:
 
 
 # ---------- FILTER ----------
-def filter_candidates(
+def _filter_candidates(
     articles: Sequence[Article],
     config: OutletConfig,
     already_sampled: set[str],
@@ -289,7 +289,7 @@ def _spread(total_wanted: int, available_articles: dict[str, int]) -> dict[str, 
     return article_collection
 
 
-def sample_stratified(
+def _sample_stratified(
     articles: Sequence[Article],
     years: range,
     total_wanted: int,
@@ -332,7 +332,7 @@ def sample_stratified(
 
 
 # ---------- OUTPUT ----------
-def write_sample(
+def _write_sample(
     final_sample: Sequence[Article],
     slug: str,
     out_dir: str | Path,
@@ -380,7 +380,7 @@ def write_sample(
     return txt_path, csv_path
 
 
-def append_sampled_log(
+def _append_sampled_log(
     final_sample: Sequence[Article],
     slug: str,
     output_dir: str | Path,
@@ -434,8 +434,8 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     """
     slug = outlet.slug
     # Load the inventory and already-sampled URLs.
-    inventory = load_inventory(data_dir / f'{slug}_inventory.csv')
-    already_sampled = load_sampled_log(data_dir / f'{slug}_sampled.log')
+    inventory = _load_inventory(data_dir / f'{slug}_inventory.csv')
+    already_sampled = _load_sampled_log(data_dir / f'{slug}_sampled.log')
     logger.info(
         '%s: loaded %d inventory articles, %d already sampled',
         slug,
@@ -444,7 +444,7 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     )
 
     # Filter the inventory to get options.
-    filtered = filter_candidates(inventory, outlet, already_sampled)
+    filtered = _filter_candidates(inventory, outlet, already_sampled)
     logger.info(
         '%s: %d articles after category filter and sampled exclusion',
         slug,
@@ -454,14 +454,14 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     # Use a seeded RNG for a reproducible sample across runs.
     seeded_rng = random.Random(SEED)
     # Sample from the filtered options.
-    pre_sample = sample_stratified(
+    pre_sample = _sample_stratified(
         filtered,
         PRE_YEARS,
         PRE_GPT_NO,
         seeded_rng,
         'pre',
     )
-    post_sample = sample_stratified(
+    post_sample = _sample_stratified(
         filtered,
         POST_YEARS,
         POST_GPT_NO,
@@ -472,8 +472,8 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     final_sample = pre_sample + post_sample
 
     # Write the sample outputs and update the log.
-    txt_file, csv_file = write_sample(final_sample, slug, data_dir)
-    log_file = append_sampled_log(final_sample, slug, data_dir)
+    txt_file, csv_file = _write_sample(final_sample, slug, data_dir)
+    log_file = _append_sampled_log(final_sample, slug, data_dir)
     _summarise(slug, final_sample)
 
     logger.info(
