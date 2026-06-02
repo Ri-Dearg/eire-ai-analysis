@@ -88,11 +88,42 @@ def load_inventory(csv_path: str | Path) -> list[Article]:
         ]
 
 
+# ---------- FILTER ----------
+def filter_candidates(
+    articles: Sequence[Article],
+    config: OutletConfig,
+    already_sampled: set[str],
+) -> list[Article]:
+    """Drop excluded categories and any URL already sampled.
+
+    Args:
+        articles (Sequence[Article]): All inventory articles.
+        config (OutletConfig): Outlet's category reader and exclude set.
+        already_sampled (set[str]): URLs drawn in previous runs.
+
+    Returns:
+        list[Article]: Eligible candidates for this run.
+
+    """
+    return [
+        article
+        for article in articles
+        if config.category(article.url) not in config.exclude
+        and article.url not in already_sampled
+    ]
+
+
 # ---------- SAMPLE ----------
 def sample(outlet_slug: str, data_dir: Path) -> None:
     inventory = load_inventory(data_dir / f'{outlet_slug}_inventory.csv')
-
-    print(inventory[:5])
+    filtered = filter_candidates(
+        inventory,
+        OUTLETS['rte'],
+        {
+            'https://www.rte.ie/news/2026/0531/1576112-tomi-reichental/',
+        },
+    )
+    print(filtered[:10])
 
 
 sample(OUTLETS['rte'].slug, DATA_DIR)
