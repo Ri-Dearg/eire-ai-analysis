@@ -136,7 +136,7 @@ OUTLETS: dict[str, Outlet] = {
     'irish_examiner': Outlet(
         slug='irish_examiner',
         base_url='https://www.irishexaminer.com',
-        date_source='lastmod',
+        date_source='news',
         article_re=_EXAMINER_ARTICLE_RE,
     ),
     'the_liberal': Outlet(
@@ -224,10 +224,13 @@ def _parse_sitemap(xml: str) -> list[dict[str, str]]:
         if not loc:
             continue
         lastmod = element.find('lastmod')
+        # Irish Examiner uses <publication_date>.
+        news_date = element.find('publication_date')
         xml_keys.append(
             {
                 'loc': loc.text.strip(),
                 'lastmod': lastmod.text.strip() if lastmod else '',
+                'news_date': news_date.text.strip() if news_date else '',
             }
         )
     return xml_keys
@@ -331,7 +334,8 @@ def _urls_to_articles(
         if outlet.date_source == 'url':
             pub = _date_from_url(loc)
         else:
-            pub = date_from_lastmod(entry.get('lastmod', ''))
+            field = 'news_date' if outlet.date_source == 'news' else 'lastmod'
+            pub = date_from_lastmod(entry.get(field, ''))
         if pub is None:
             continue
         captured.add(clean_url)
