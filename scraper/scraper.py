@@ -118,6 +118,7 @@ def _fetch(session: requests.Session, url: str) -> tuple[int, str, str] | None:
     """
     # Loop with retries for transport errors and certain HTTP statuses.
     for attempt in range(MAX_RETRIES + 1):
+        session.cookies.clear()
         try:
             resp = session.get(url, timeout=REQUEST_TIMEOUT)
         except requests.RequestException as e:
