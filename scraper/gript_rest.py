@@ -110,6 +110,38 @@ def _rest_url(slug: str) -> str:
 
 
 # ---------- FETCH ----------
+def _post_payload(
+    resp: requests.Response,
+    article_url: str,
+) -> tuple[int, str, str] | None:
+    """Turn a REST response into a storable (status, json, url) triple.
+
+    The stored body is the single post object as  JSON.
+
+    Args:
+        resp (requests.Response): The REST API response.
+        article_url (str): The original article URL.
+
+    Returns:
+        tuple[int, str, str] | None: (status, payload, article_url) on a
+            usable post, else None.
+
+    """
+    if resp.status_code != HTTP_OK:
+        logger.warning('rest %s for %s', resp.status_code, article_url)
+        return None
+    try:
+        posts = resp.json()
+    except ValueError:
+        logger.warning('non-JSON rest response for %s', article_url)
+        return None
+    if not posts:
+        logger.warning('no post for slug: %s', article_url)
+        return None
+    payload = json.dumps(posts[0], ensure_ascii=False)
+    return resp.status_code, payload, article_url
+
+
 def _fetch_post(
     session: requests.Session,
     article_url: str,
@@ -153,5 +185,5 @@ def _fetch_post(
             time.sleep(wait)
             continue
 
-        return resp, article_url
+        return _post_payload(resp, article_url)
     return None
