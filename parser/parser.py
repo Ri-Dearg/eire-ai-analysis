@@ -61,6 +61,14 @@ COLS = [
 DOTALL_I = re.DOTALL | re.IGNORECASE
 
 
+def iso_from_dt(string: str | None) -> str:
+    """Return the leading ``YYYY-MM-DD`` of a datetime string, or ''."""
+    if not string:
+        return ''
+    date_match = re.match(r'(\d{4})-(\d{2})-(\d{2})', string)
+    return date_match.group(0) if date_match else ''
+
+
 def unesc(string: object) -> str:
     """HTML-unescape and strip; tolerate None."""
     return ihtml.unescape(str(string or '')).strip()
@@ -109,7 +117,9 @@ def feat_rte(html: str, url: str) -> dict:
         (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
     )
     author = unesc(author_name(article.get('author')) or '')
-    return article
+    date_iso = iso_from_dt(article.get('datePublished') or '')
+    date_src = 'ld' if date_iso else ''
+    return date_iso, date_src, author
 
 
 def _row_record(row: tuple) -> dict:
