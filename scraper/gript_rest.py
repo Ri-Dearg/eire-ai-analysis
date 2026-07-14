@@ -187,3 +187,55 @@ def _fetch_post(
 
         return _post_payload(resp, article_url)
     return None
+
+
+# ---------- INGEST ----------
+def ingest_gript(
+    urls: list[str],
+    db_path: str = DB_PATH,
+    delay_range: tuple[float, float] = DELAY_RANGE,
+) -> dict[str, int]:
+    """Re-ingest Gript articles via the REST API.
+
+    Mirrors scraper.ingest's outcome but fetches the REST
+    endpoint instead of the article page.
+
+    Args:
+        urls (list[str]): Sampled Gript article URLs.
+        db_path (str, optional): DB path. Defaults to DB_PATH.
+        delay_range (tuple[float, float], optional): Delay window.
+
+    Returns:
+        dict[str, int]: Counts of stored / skipped / failed / not_stored.
+
+    """
+    conn = _connect(db_path)
+    try:
+        oid = _outlet_id(conn, GRIPT_SLUG)
+        counts: Counter[str] = Counter(
+            {'stored': 0, 'skipped': 0, 'premium': 0, 'failed': 0, 'not_stored': 0}
+        )
+        with _create_session() as session:
+            for url in urls:
+                canon = _canonic_url(url)
+                if _already_have(conn, canon):
+                    counts['skipped'] += 1
+                    continue
+                result = _fetch_post(session, url)
+                if result is None:
+                    counts['failed'] += 1
+                    logger.info('failed: %s', url)
+                    continue
+                outcome = (
+                    'stored'
+                    if _store_page(conn, oid, SOURCE_FEED, result)
+                    else ('not_stored')
+                )
+                counts[outcome] += 1
+                logger.info('%s: %s', outcome, url)
+                time.sleep(random.uniform(*delay_range))
+    finally:
+        conn.close()
+
+    logger.info('gript rest done: %s', dict(counts))
+    return dict(counts)
