@@ -21,7 +21,7 @@ import requests
 # LOGGING
 logger = logging.getLogger(__name__)
 
-OUTLET_SAMPLES = ['rte', 'irish_examiner', 'gript', 'the_liberal']
+OUTLET_SAMPLES = ['rte', 'irish_examiner', 'the_liberal']
 SOURCE_FEED = 'sitemap'
 DATA_DIR = Path('./data')
 
