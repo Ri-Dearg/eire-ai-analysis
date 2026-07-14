@@ -430,6 +430,11 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     # Load the inventory and already-sampled URLs.
     inventory = _load_inventory(data_dir / f'{slug}_inventory.csv')
     already_sampled = _load_sampled_log(data_dir / f'{slug}_sampled.log')
+    # The detection stage's calibration URLs must be kept separate from the
+    # corpus.
+    already_sampled |= _load_sampled_log(
+        data_dir / 'calibration' / f'{slug}_calibration.log'
+    )
     logger.info(
         '%s: loaded %d inventory articles, %d already sampled',
         slug,
