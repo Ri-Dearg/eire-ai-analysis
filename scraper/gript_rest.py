@@ -3,8 +3,8 @@
 Why this module exists:
     Gript article pages render the body with JavaScript, so a
     requests fetch stores the page chrome and <head> meta but no
-    body text. The scraper.ingest captured
-    bodyless Gript rows. WordPress exposes the full body server-side.
+    body text. The scraper.ingest captured bodyless Gript rows.
+    WordPress exposes the full body server-side.
 
     This module reuses every `scraper.scraper` helper (DB connection, dedup,
     canonicalisation, storage) and only swaps the fetch step.
@@ -79,3 +79,31 @@ PREMIUM_MARKERS = (
     'memberful-global-teaser-content',
     'This article is premium content',
 )
+
+
+# ---------- URL → REST ----------
+def _slug_from_url(url: str) -> str:
+    """Derive the WordPress post slug from a Gript article URL.
+
+    Args:
+        url (str): Article URL.
+
+    Returns:
+        str: The trailing path segment.
+
+    """
+    return _canonic_url(url).rstrip('/').rsplit('/', 1)[-1]
+
+
+def _rest_url(slug: str) -> str:
+    """Build the REST query URL for a single post slug.
+
+    Args:
+        slug (str): Post slug.
+
+    Returns:
+        str: Fully-formed query URL.
+
+    """
+    query = urlencode({'slug': slug, '_fields': ','.join(_REST_FIELDS)})
+    return f'{REST_BASE}?{query}'
