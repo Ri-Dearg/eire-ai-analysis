@@ -23,6 +23,8 @@ import time
 from multiprocessing import Pool
 from pathlib import Path
 
+import html as ihtml
+
 ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
 OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
@@ -59,6 +61,11 @@ COLS = [
 DOTALL_I = re.DOTALL | re.IGNORECASE
 
 
+def unesc(string: object) -> str:
+    """HTML-unescape and strip; tolerate None."""
+    return ihtml.unescape(str(string or '')).strip()
+
+
 def jsonld_nodes(html: str) -> list[dict]:
     """Return all JSON nodes in html.
 
@@ -86,12 +93,22 @@ def jsonld_nodes(html: str) -> list[dict]:
     return nodes
 
 
+def author_name(article: object) -> str | None:
+    """Resolve a JSON-LD author value (dict/list/str) to a name."""
+    if isinstance(article, dict):
+        return article.get('name')
+    if isinstance(article, list) and article:
+        return author_name(article[0])
+    return article if isinstance(article, str) else None
+
+
 def feat_rte(html: str, url: str) -> dict:
     """Extract RTE fields; date falls back to URL path for live pages."""
     nodes = jsonld_nodes(html)
     article = next(
         (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
     )
+    author = unesc(author_name(article.get('author')) or '')
     return article
 
 
