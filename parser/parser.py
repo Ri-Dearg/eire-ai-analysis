@@ -62,7 +62,7 @@ DOTALL_I = re.DOTALL | re.IGNORECASE
 
 
 def iso_from_dt(string: str | None) -> str:
-    """Return the leading ``YYYY-MM-DD`` of a datetime string, or ''."""
+    """Return the leading YYYY-MM-DD of a datetime string, or ''."""
     if not string:
         return ''
     date_match = re.match(r'(\d{4})-(\d{2})-(\d{2})', string)
@@ -111,7 +111,7 @@ def author_name(article: object) -> str | None:
 
 
 def meta_content(html: str, name: str) -> str:
-    """Return the ``content`` of the ``<meta>`` whose name/property is ``name``."""
+    """Return the content of the <meta> whose name/property is name."""
     esc = re.escape(name)
     meta_match = re.search(
         rf'<meta[^>]*(?:name|property)=["\']{esc}["\'][^>]*content=["\']([^"\']*)',
@@ -145,6 +145,9 @@ def feat_rte(html: str, url: str) -> dict:
         if date_match:
             date_iso = '{}-{}-{}'.format(*date_match.groups())
             date_src = 'url'
+    segment_match = re.search(r'rte\.ie/news/([^/]+)/', url)
+    segment = segment_match.group(1) if segment_match else ''
+    section = '' if re.fullmatch(r'\d{4}', segment) else segment
     return date_iso, date_src, author
 
 
@@ -190,7 +193,7 @@ def worker(wid: int) -> int:
                     last_done = max(last_done, int(head))
 
     new_file = last_done == 0
-    ids = [id for id in ids if id > last_done]
+    ids = [id_num for id_num in ids if id_num > last_done]
     current_time = time.time()
     num = 0
     done = True
