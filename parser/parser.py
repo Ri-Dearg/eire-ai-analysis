@@ -38,12 +38,18 @@ def worker(wid: int) -> int:
         )
     ]
     path = OUT_DIR / f'part_{wid}.csv'
-
+    last_done = 0
+    if path.exists():
+        with path.open(encoding='utf-8') as part:
+            for line in part:
+                head = line.split(',', 1)[0]
+                if head.isdigit():
+                    last_done = max(last_done, int(head))
     return len(ids)
 
 
 def main() -> int:
     """Run the parse pass across all workers and merge to ``OUT_CSV``."""
-    t0 = time.time()
+    current_time = time.time()
     with Pool(N_WORKERS) as pool:
         remaining = pool.map(worker, range(N_WORKERS))
