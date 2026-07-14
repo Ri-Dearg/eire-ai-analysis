@@ -304,6 +304,15 @@ def ingest_gript(
                     counts['failed'] += 1
                     logger.info('failed: %s', url)
                     continue
+                # Premium = Memberful teaser only; full body is gated, so skip it
+                # Log it so runs skip it before fetching.
+                if _is_premium(json.loads(result[1])):
+                    _append_premium(canon)
+                    premium_seen.add(canon)
+                    counts['premium'] += 1
+                    logger.info('premium (skipped): %s', url)
+                    time.sleep(random.uniform(*delay_range))
+                    continue
                 outcome = (
                     'stored'
                     if _store_page(conn, oid, SOURCE_FEED, result)
