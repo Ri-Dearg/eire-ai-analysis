@@ -377,3 +377,24 @@ def ingest_gript(
 
     logger.info('gript rest done: %s', dict(counts))
     return dict(counts)
+
+
+def main() -> None:
+    """Dispatch on argv: --verify [N] / bare re-ingest."""
+    args = sys.argv[1:]
+    if args and args[0] == '--verify':
+        verify(int(args[1]) if len(args) > 1 else VERIFY_DEFAULT)
+        return
+    urls = _read_sample(GRIPT_SLUG, DATA_DIR)
+    if not urls:
+        print('no gript sample urls found')
+        return
+    print(f'ingesting {len(urls)} gript urls via wp-rest')
+    print(ingest_gript(urls))
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s'
+    )
+    main()
