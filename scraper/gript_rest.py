@@ -189,6 +189,19 @@ def _fetch_post(
     return None
 
 
+# ---------- PREMIUM SKIP-LOG ----------
+def _append_premium(url: str, path: Path = PREMIUM_LOG) -> None:
+    """Append a premium canonical URL to the persistent skip-log.
+
+    Args:
+        url (str): Canonical URL of the premium post.
+        path (Path, optional): Skip-log path. Defaults to PREMIUM_LOG.
+
+    """
+    with path.open('a', encoding='utf-8') as handle:
+        handle.write(f'{url}\n')
+
+
 # ---------- INGEST ----------
 def ingest_gript(
     urls: list[str],
