@@ -107,3 +107,51 @@ def _rest_url(slug: str) -> str:
     """
     query = urlencode({'slug': slug, '_fields': ','.join(_REST_FIELDS)})
     return f'{REST_BASE}?{query}'
+
+
+# ---------- FETCH ----------
+def _fetch_post(
+    session: requests.Session,
+    article_url: str,
+) -> tuple[int, str, str] | None:
+    """Fetch a single Gript post via REST, with the same retry policy as `_fetch`.
+
+    Args:
+        session (requests.Session): User-agent session.
+        article_url (str): Article URL.
+
+    Returns:
+        tuple[int, str, str] | None: Storable triple, or None on failure.
+
+    """
+    rest_url = _rest_url(_slug_from_url(article_url))
+    for attempt in range(MAX_RETRIES + 1):
+        session.cookies.clear()
+        try:
+            resp = session.get(rest_url, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as exc:
+            if attempt == MAX_RETRIES:
+                logger.exception('transport error %s', rest_url)
+                return None
+            wait = _pause(attempt)
+            logger.warning(
+                'retry %d/%d in %.1fs (%s)', attempt + 1, MAX_RETRIES, wait, exc
+            )
+            time.sleep(wait)
+            continue
+
+        if resp.status_code in RETRY_STATUSES and attempt < MAX_RETRIES:
+            wait = _retry_after(resp) or _pause(attempt)
+            logger.warning(
+                '%s %s; retry %d/%d in %.1fs',
+                resp.status_code,
+                rest_url,
+                attempt + 1,
+                MAX_RETRIES,
+                wait,
+            )
+            time.sleep(wait)
+            continue
+
+        return resp, article_url
+    return None
