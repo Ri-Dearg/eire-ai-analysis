@@ -261,6 +261,57 @@ def _rendered(value: object) -> str:
     return ''
 
 
+def _strip_html(html: str) -> str:
+    """Return visible text from HTML.
+
+    Args:
+        html (str): HTML.
+
+    Returns:
+        str: Plain text.
+
+    """
+    return BeautifulSoup(html, 'html.parser').get_text(' ', strip=True)
+
+
+# Written by AI
+def verify(n: int = VERIFY_DEFAULT) -> None:
+    """Probe n sampled slugs and report body extraction; no DB writes.
+
+    Args:
+        n (int, optional): Number of slugs to probe. Defaults to VERIFY_DEFAULT.
+
+    """
+    urls = _read_sample(GRIPT_SLUG, DATA_DIR)[:n]
+    if not urls:
+        print('no gript sample urls found')
+        return
+    print(f'Probing {len(urls)} Gript slugs via wp-rest\n')
+    ok = premium = 0
+    with _create_session() as session:
+        for i, url in enumerate(urls, 1):
+            result = _fetch_post(session, url)
+            if result is None:
+                print(f'[{i}] FAILED  {url}')
+                continue
+            post = json.loads(result[1])
+            body = _strip_html(_rendered(post.get('content')))
+            title = _rendered(post.get('title'))
+            author = (post.get('yoast_head_json') or {}).get('author', '')
+            is_prem = _is_premium(post)
+            full = not is_prem and len(body) >= MIN_BODY_CHARS
+            ok += full
+            premium += is_prem
+            tag = 'PREMIUM' if is_prem else ('OK   ' if full else 'SHORT')
+            print(f'[{i}] {tag} body={len(body):>5}c author={author!r:18} | {title[:48]}')
+            if i < len(urls):
+                time.sleep(random.uniform(*DELAY_RANGE))
+    print(
+        f'\n{ok}/{len(urls)} full bodies, {premium} premium teasers '
+        f'(gated, not recoverable via REST).'
+    )
+
+
 # ---------- INGEST ----------
 def ingest_gript(
     urls: list[str],
