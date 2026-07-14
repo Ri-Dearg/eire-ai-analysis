@@ -13,6 +13,7 @@ once and the easier curation can be re-run freely.
 """
 
 import csv
+import json
 import os
 import re
 import sqlite3
@@ -26,7 +27,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
 OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
 HTTP_OK = 200
-
 
 N_WORKERS = 4
 
@@ -56,10 +56,43 @@ COLS = [
     'parse_error',
 ]
 
+DOTALL_I = re.DOTALL | re.IGNORECASE
+
+
+def jsonld_nodes(html: str) -> list[dict]:
+    """Return all JSON nodes in html.
+
+    Parses with strict=False because Examiner blocks carry literal
+    control characters that fail strict JSON.
+    """
+    nodes: list[dict] = []
+    for block in re.findall(
+        r'<script[^>]*application/ld\+json[^>]*>(.*?)</script>', html, flags=DOTALL_I
+    ):
+        try:
+            data = json.loads(block.strip(), strict=False)
+        except (ValueError, TypeError):
+            continue
+        stack = [data]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                if '@graph' in item:
+                    stack.extend(item['@graph'])
+                else:
+                    nodes.append(item)
+            elif isinstance(item, list):
+                stack.extend(item)
+    return nodes
+
 
 def feat_rte(html: str, url: str) -> dict:
-    """Extract RTE fields; date falls back to URL path for LD-less live pages."""
-    return html  # Placeholder for actual feature extraction logic
+    """Extract RTE fields; date falls back to URL path for live pages."""
+    nodes = jsonld_nodes(html)
+    article = next(
+        (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
+    )
+    return article
 
 
 def _row_record(row: tuple) -> dict:
