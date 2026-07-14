@@ -379,11 +379,44 @@ def ingest_gript(
     return dict(counts)
 
 
+# ---------- PURGE ----------
+def purge_gript(db_path: str = DB_PATH) -> int:
+    """Delete all existing Gript rows so REST re-ingest isn't skipped by dedup.
+
+    Removes raw_page rows first, then their `article` rows.
+
+    Args:
+        db_path (str, optional): DB path. Defaults to DB_PATH.
+
+    Returns:
+        int: Number of article rows deleted.
+
+    """
+    conn = _connect(db_path)
+    try:
+        oid = _outlet_id(conn, GRIPT_SLUG)
+        with conn:
+            conn.execute(
+                'DELETE FROM raw_page WHERE article_id IN '
+                '(SELECT id FROM article WHERE outlet_id = ?)',
+                (oid,),
+            )
+            cur = conn.execute('DELETE FROM article WHERE outlet_id = ?', (oid,))
+        deleted = cur.rowcount
+    finally:
+        conn.close()
+    logger.info('purged %d gript articles', deleted)
+    return deleted
+
+
 def main() -> None:
-    """Dispatch on argv: --verify [N] / bare re-ingest."""
+    """Dispatch on argv: --verify [N] / --purge / bare re-ingest."""
     args = sys.argv[1:]
     if args and args[0] == '--verify':
         verify(int(args[1]) if len(args) > 1 else VERIFY_DEFAULT)
+        return
+    if args and args[0] == '--purge':
+        print(f'purged {purge_gript()} gript rows')
         return
     urls = _read_sample(GRIPT_SLUG, DATA_DIR)
     if not urls:
