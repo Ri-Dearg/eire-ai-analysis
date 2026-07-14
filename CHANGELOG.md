@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.0] - 2026-07-14
+### :sparkles: New Features
+- [`cd91c90`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/cd91c908b1eb5ba7a15a23049b90be13679687ed) - **scrape**: ✨ add global variables for gript *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a6840d2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a6840d2cec8c735069a376bb2cc712d6ca7e87e2) - **scrape**: ✨ add gript url parser *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`ff17955`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ff17955d8f3b50caa5e514c993042a99f9a279d2) - **scrape**: ✨ add gript REST scrape *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`bd7df71`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bd7df7154f94a7238339d8a5fa3d2f528a2f91fc) - **scrape**: ✨ add gript json dump on fetch *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`b0511e1`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/b0511e1c1a2e9f6dbc5efcf2f883feb4d9937ff9) - **scrape**: ✨ add function to ingest Gript *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`1d39702`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/1d39702c7a76db1a875ac22595b8b6e2fffedde2) - **scrape**: ✨ add premium article log *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`94af183`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/94af183587e73638985257c8ed74c6ae5c37de5c) - **scrape**: ✨ add check for premium articles *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`92ac74c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/92ac74c9ad228b89476d2928560723f6c35930db) - **scrape**: ✨ add article verification feature *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`cd4688d`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/cd4688da72c991795ed3de5924955245c69520b9) - **scrape**: ✨ add main with arguments *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`0399f27`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/0399f272d43e9c4e010d8d0b13ae18944559f42b) - **scrape**: ✨ add purge from DB func *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :bug: Bug Fixes
+- [`7a07a15`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/7a07a1592396a1841eb65af2fed5516daea81716) - **scrape**: 🔥 remove gript from scraper *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a197423`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a19742384f8d094a9012a806c4e2506c7839192b) - **scrape**: 🐛 add premium check on rendered page *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`0d60b23`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/0d60b237954db2d6431425d9e12f20cae057ec3f) - **scrape**: 🐛 add premium check and log *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`1e7c5f7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/1e7c5f76ad642a0b6ec7e5fb9ac27bb6d287985e) - **scrape**: 🐛 update init with ingest call *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :wrench: Chores
+- [`e029d02`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/e029d0225d0a3db22ee65b5104e16a0f5d2ed320) - **reqs**: add huggingface agents *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.9.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.8.0...v0.9.0
+
 ## [v0.8.0] - 2026-06-02
 ### :sparkles: New Features
 - [`c84d611`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c84d61194fc31a4fc029b50899328893171e041f) - **sample**: ✨ add csv load *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
