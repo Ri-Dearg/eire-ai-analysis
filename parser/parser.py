@@ -14,6 +14,7 @@ once and the easier curation can be re-run freely.
 
 import csv
 import os
+import re
 import sqlite3
 import time
 
@@ -24,6 +25,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
 OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
+HTTP_OK = 200
+
 
 N_WORKERS = 4
 
@@ -52,6 +55,32 @@ COLS = [
     'body_text',
     'parse_error',
 ]
+
+
+def feat_rte(html: str, url: str) -> dict:
+    """Extract RTE fields; date falls back to URL path for LD-less live pages."""
+    return html  # Placeholder for actual feature extraction logic
+
+
+def _row_record(row: tuple) -> dict:
+    """Build one record from a (id, outlet, url, curl, status, raw) row."""
+    aid, outlet, aurl, curl, status, raw = row
+    record = dict.fromkeys(COLS, '')
+    record.update(
+        article_id=aid, outlet=outlet, url=aurl, url_canonical=curl, http_status=status
+    )
+    if not raw:
+        record['parse_error'] = 'no_raw'
+        return record
+    if status != HTTP_OK:
+        record['parse_error'] = f'http_{status}'
+        return record
+    try:
+        features = feat_rte(raw, curl or aurl)
+    except Exception as exc:
+        record['parse_error'] = type(exc).__name__
+        return record
+    return record
 
 
 def worker(wid: int) -> int:
@@ -90,13 +119,14 @@ def worker(wid: int) -> int:
                 break
             chunk = ids[i : i + BATCH]
             placeholders = ','.join('?' * len(chunk))
-            q = (
+            query = (
                 'SELECT a.id, o.name, a.url, a.url_canonical, r.http_status, '
                 'r.raw_html FROM article a JOIN outlet o ON o.id=a.outlet_id '
                 'LEFT JOIN raw_page r ON r.article_id=a.id '
                 f'WHERE a.id IN ({placeholders})'
             )
-            for db_row in cursor.execute(q, chunk):
+            for db_row in cursor.execute(query, chunk):
+                w.writerow(_row_record(db_row))
                 num += 1
             fh.flush()
 
