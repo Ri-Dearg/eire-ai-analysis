@@ -12,6 +12,7 @@ single CSV with one row per article and no drop decisions,so the body pass runs
 once and the easier curation can be re-run freely.
 """
 
+import csv
 import os
 import sqlite3
 import time
@@ -26,6 +27,32 @@ OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
 
 N_WORKERS = 4
 
+BATCH = 200
+TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
+
+COLS = [
+    'article_id',
+    'outlet',
+    'url',
+    'url_canonical',
+    'http_status',
+    'published_date',
+    'date_src',
+    'period',
+    'author',
+    'section',
+    'is_wire',
+    'wire_match',
+    'is_otd',
+    'sub_excl',
+    'gript_premium',
+    'body_len_raw',
+    'body_sha1',
+    'word_count',
+    'body_text',
+    'parse_error',
+]
+
 
 def worker(wid: int) -> int:
     """Parse the id-stripe id %% N_WORKERS == wid into part_<wid>.csv."""
@@ -37,6 +64,7 @@ def worker(wid: int) -> int:
             f'SELECT id FROM article WHERE (id % {N_WORKERS})={wid} ORDER BY id'
         )
     ]
+
     path = OUT_DIR / f'part_{wid}.csv'
     last_done = 0
     if path.exists():
@@ -45,6 +73,33 @@ def worker(wid: int) -> int:
                 head = line.split(',', 1)[0]
                 if head.isdigit():
                     last_done = max(last_done, int(head))
+
+    new_file = last_done == 0
+    ids = [id for id in ids if id > last_done]
+    current_time = time.time()
+    num = 0
+    done = True
+
+    with path.open('a', newline='', encoding='utf-8') as fh:
+        w = csv.DictWriter(fh, fieldnames=COLS)
+        if wid == 0 and new_file:
+            w.writeheader()
+        for i in range(0, len(ids), BATCH):
+            if TIME_BUDGET and time.time() - current_time > TIME_BUDGET:
+                done = False
+                break
+            chunk = ids[i : i + BATCH]
+            placeholders = ','.join('?' * len(chunk))
+            q = (
+                'SELECT a.id, o.name, a.url, a.url_canonical, r.http_status, '
+                'r.raw_html FROM article a JOIN outlet o ON o.id=a.outlet_id '
+                'LEFT JOIN raw_page r ON r.article_id=a.id '
+                f'WHERE a.id IN ({placeholders})'
+            )
+            for db_row in cursor.execute(q, chunk):
+                num += 1
+            fh.flush()
+
     return len(ids)
 
 
