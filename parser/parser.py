@@ -110,6 +110,24 @@ def author_name(article: object) -> str | None:
     return article if isinstance(article, str) else None
 
 
+def meta_content(html: str, name: str) -> str:
+    """Return the ``content`` of the ``<meta>`` whose name/property is ``name``."""
+    esc = re.escape(name)
+    meta_match = re.search(
+        rf'<meta[^>]*(?:name|property)=["\']{esc}["\'][^>]*content=["\']([^"\']*)',
+        html,
+        flags=re.IGNORECASE,
+    )
+    if not meta_match:
+        meta_match = re.search(
+            rf'<meta[^>]*content=["\']([^"\']*)["\'][^>]*(?:name|property)='
+            rf'["\']{esc}["\']',
+            html,
+            flags=re.IGNORECASE,
+        )
+    return meta_match.group(1) if meta_match else ''
+
+
 def feat_rte(html: str, url: str) -> dict:
     """Extract RTE fields; date falls back to URL path for live pages."""
     nodes = jsonld_nodes(html)
@@ -119,6 +137,14 @@ def feat_rte(html: str, url: str) -> dict:
     author = unesc(author_name(article.get('author')) or '')
     date_iso = iso_from_dt(article.get('datePublished') or '')
     date_src = 'ld' if date_iso else ''
+    if not date_iso:
+        date_iso = iso_from_dt(meta_content(html, 'article:published_time'))
+        date_src = 'meta' if date_iso else ''
+    if not date_iso:
+        date_match = re.search(r'/news/(?:[^/]+/)?(\d{4})/(\d{2})(\d{2})/', url)
+        if date_match:
+            date_iso = '{}-{}-{}'.format(*date_match.groups())
+            date_src = 'url'
     return date_iso, date_src, author
 
 
