@@ -190,6 +190,25 @@ def _fetch_post(
 
 
 # ---------- PREMIUM SKIP-LOG ----------
+def _load_premium_log(path: Path = PREMIUM_LOG) -> set[str]:
+    """Load canonical URLs of premium posts seen on previous runs.
+
+    Args:
+        path (Path, optional): Skip-log path. Defaults to PREMIUM_LOG.
+
+    Returns:
+        set[str]: Canonical URLs to skip without re-fetching (empty if absent).
+
+    """
+    if not path.exists():
+        return set()
+    return {
+        line.strip()
+        for line in path.read_text(encoding='utf-8').splitlines()
+        if line.strip()
+    }
+
+
 def _append_premium(url: str, path: Path = PREMIUM_LOG) -> None:
     """Append a premium canonical URL to the persistent skip-log.
 
@@ -228,11 +247,17 @@ def ingest_gript(
         counts: Counter[str] = Counter(
             {'stored': 0, 'skipped': 0, 'premium': 0, 'failed': 0, 'not_stored': 0}
         )
+        premium_seen = _load_premium_log()
         with _create_session() as session:
             for url in urls:
                 canon = _canonic_url(url)
                 if _already_have(conn, canon):
                     counts['skipped'] += 1
+                    continue
+                # Known-premium from a previous run: skip with no fetch/delay.
+                if canon in premium_seen:
+                    counts['premium'] += 1
+                    logger.info('premium (cached): %s', url)
                     continue
                 result = _fetch_post(session, url)
                 if result is None:
