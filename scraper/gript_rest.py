@@ -190,6 +190,37 @@ def _fetch_post(
 
 
 # ---------- PREMIUM SKIP-LOG ----------
+def _append_premium(url: str, path: Path = PREMIUM_LOG) -> None:
+    """Append a premium canonical URL to the persistent skip-log.
+
+    Args:
+        url (str): Canonical URL of the premium post.
+        path (Path, optional): Skip-log path. Defaults to PREMIUM_LOG.
+
+    """
+    with path.open('a', encoding='utf-8') as handle:
+        handle.write(f'{url}\n')
+
+
+def _is_premium(post: dict) -> bool:
+    """Detect a Memberful premium teaser.
+
+    Args:
+        post (dict): A decoded WP REST post object.
+
+    Returns:
+        bool: True if the post is premium content.
+
+    """
+    if any(marker in _rendered(post.get('content')) for marker in PREMIUM_MARKERS):
+        return True
+    graph = (post.get('yoast_head_json') or {}).get('schema', {}).get('@graph', [])
+    return any(
+        isinstance(node, dict) and 'Premium' in (node.get('articleSection') or [])
+        for node in graph
+    )
+
+
 def _load_premium_log(path: Path = PREMIUM_LOG) -> set[str]:
     """Load canonical URLs of premium posts seen on previous runs.
 
@@ -209,16 +240,25 @@ def _load_premium_log(path: Path = PREMIUM_LOG) -> set[str]:
     }
 
 
-def _append_premium(url: str, path: Path = PREMIUM_LOG) -> None:
-    """Append a premium canonical URL to the persistent skip-log.
+# ---------- VERIFY ----------
+def _rendered(value: object) -> str:
+    """Read a WP REST field that may be a {'rendered': ...} dict or a bare string.
+
+    Gript's REST returns content as a {'rendered': ...} object but
+    title/excerpt as plain strings, so accessors must tolerate both.
 
     Args:
-        url (str): Canonical URL of the premium post.
-        path (Path, optional): Skip-log path. Defaults to PREMIUM_LOG.
+        value (object): A post field value (dict, str, or missing).
+
+    Returns:
+        str: The rendered text, or '' if absent.
 
     """
-    with path.open('a', encoding='utf-8') as handle:
-        handle.write(f'{url}\n')
+    if isinstance(value, dict):
+        return str(value.get('rendered', ''))
+    if isinstance(value, str):
+        return value
+    return ''
 
 
 # ---------- INGEST ----------
