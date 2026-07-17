@@ -13,6 +13,7 @@ once and the easier curation can be re-run freely.
 """
 
 import csv
+import html as ihtml
 import json
 import os
 import re
@@ -22,8 +23,6 @@ import time
 # Multiprocessing structure suggested and designed by AI for faster parsing.
 from multiprocessing import Pool
 from pathlib import Path
-
-import html as ihtml
 
 ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
@@ -61,6 +60,14 @@ COLS = [
 DOTALL_I = re.DOTALL | re.IGNORECASE
 
 
+def best_article_body(stripped_html: str) -> str:
+    """Return the longest <article> block's <p> text (else whole page)."""
+    blocks = re.findall(r'<article\b[^>]*>(.*?)</article>', stripped_html, flags=DOTALL_I)
+    if not blocks:
+        return p_text(stripped_html)
+    return max((p_text(b) for b in blocks), key=len)
+
+
 def iso_from_dt(string: str | None) -> str:
     """Return the leading YYYY-MM-DD of a datetime string, or ''."""
     if not string:
@@ -69,7 +76,21 @@ def iso_from_dt(string: str | None) -> str:
     return date_match.group(0) if date_match else ''
 
 
-def unesc(string: object) -> str:
+def p_text(segment: str) -> str:
+    """Return concatenated visible text of the <p> tags in segment."""
+    ps = re.findall(r'<p\b[^>]*>(.*?)</p>', segment, flags=DOTALL_I)
+    return re.sub(
+        r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', ' '.join(ps)))
+    ).strip()
+
+
+def strip_style_scripts(html: str) -> str:
+    """Return h with <script> and <style> blocks removed."""
+    html = re.sub(r'<script\b[^>]*>.*?</script>', ' ', html, flags=DOTALL_I)
+    return re.sub(r'<style\b[^>]*>.*?</style>', ' ', html, flags=DOTALL_I)
+
+
+def unescape(string: object) -> str:
     """HTML-unescape and strip; tolerate None."""
     return ihtml.unescape(str(string or '')).strip()
 
@@ -134,7 +155,7 @@ def feat_rte(html: str, url: str) -> dict:
     article = next(
         (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
     )
-    author = unesc(author_name(article.get('author')) or '')
+    author = unescape(author_name(article.get('author')) or '')
     date_iso = iso_from_dt(article.get('datePublished') or '')
     date_src = 'ld' if date_iso else ''
     if not date_iso:
@@ -145,10 +166,13 @@ def feat_rte(html: str, url: str) -> dict:
         if date_match:
             date_iso = '{}-{}-{}'.format(*date_match.groups())
             date_src = 'url'
+
     segment_match = re.search(r'rte\.ie/news/([^/]+)/', url)
     segment = segment_match.group(1) if segment_match else ''
     section = '' if re.fullmatch(r'\d{4}', segment) else segment
-    return date_iso, date_src, author
+    body_raw = best_article_body(strip_style_scripts(html))
+
+    return date_iso, date_src, author, section, body_raw
 
 
 def _row_record(row: tuple) -> dict:
