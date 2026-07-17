@@ -221,6 +221,19 @@ def _strip_examiner(body_raw: str) -> str:
     return EXAMINER_TAIL_RE.sub('', body_raw).strip()
 
 
+def _strip_liberal(entry_html: str) -> str:
+    """Return the Liberal article prose.
+
+    Extracts <p> prose from the entry-content region
+    removes the inline donation widget, and trims the leading Image source.
+    """
+    b = p_text(entry_html)
+    b = LIB_DONATION_RE.sub(' ', b)
+    b = LIB_IMGSRC_RE.sub('', b)
+    b = LIB_END_RE.sub('', b)
+    return re.sub(r'\s+', ' ', b).strip()
+
+
 def _strip_rte(body_raw: str, author: str) -> str:
     """Drop RTE's consent widget and leading block."""
     b = RTE_CONSENT_RE.sub('', body_raw).strip()
@@ -316,7 +329,7 @@ def feat_liberal(html: str, url: str) -> dict:
         'date_src': 'header' if date_iso else '',
         'section': section,
         'body_raw': body_raw,
-        'body_text': '',
+        'body_text': _strip_liberal(entry),
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
         'sub_excl': 0,
