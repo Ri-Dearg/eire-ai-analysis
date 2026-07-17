@@ -39,6 +39,24 @@ EXTRACT = {
     'irish_examiner': feat_examiner,
 }
 
+MONTHS = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+]
+
+MONTH_NUM = {month: i + 1 for i, month in enumerate(MONTHS)}
+
+
 COLS = [
     'article_id',
     'outlet',
@@ -72,6 +90,25 @@ EXAMINER_TAIL_RE = re.compile(
     r'More in this section).*$',
     DOTALL_I,
 )
+
+LIB_DONATION_RE = re.compile(
+    r'TheLiberal\.ie\s+won.{0,3}t\s+quit\s+Please support us with a small '
+    r'donation on PayPal!?\s*(?:Donate Now)?\s*',
+    re.IGNORECASE,
+)
+LIB_END_RE = re.compile(
+    r'\s*(Tell us your thoughts in the|Please signup free to our newsletter|'
+    r'About Us Advertise|Copyright\s+20\d\d\s+TheLiberal|'
+    r'Privacy settings Close this module).*$',
+    DOTALL_I,
+)
+LIB_ENTRY_RE = re.compile(
+    r'<div[^>]*class=["\'][^"\']*entry-content[^"\']*["\'][^>]*>(.*)', DOTALL_I
+)
+LIB_IMGSRC_RE = re.compile(r'^Image source:\s*\S+\s*', re.IGNORECASE)
+
+MONTHS_RE = '|'.join(MONTHS)
+
 
 RTE_CONSENT_RE = re.compile(r'\s*We need your consent to load.*$', DOTALL_I)
 RTE_ROLE_RE = re.compile(
@@ -118,6 +155,11 @@ def strip_style_scripts(html: str) -> str:
 def unescape(string: object) -> str:
     """HTML-unescape and strip; tolerate None."""
     return ihtml.unescape(str(string or '')).strip()
+
+
+def visible(seg: str) -> str:
+    """Strip tags and collapse whitespace to visible text."""
+    return re.sub(r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', seg))).strip()
 
 
 def jsonld_nodes(html: str) -> list[dict]:
@@ -216,6 +258,7 @@ def feat_examiner(html: str, url: str) -> dict:
     low = html.lower()
     body_raw = best_article_body(strip_style_scripts(html))
     wire_match = WIRE_RE.search(body_raw)
+
     return {
         'author': author,
         'date_iso': date_iso,
@@ -226,6 +269,57 @@ def feat_examiner(html: str, url: str) -> dict:
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
         'sub_excl': int('exclusive subscriber content' in low),
+    }
+
+
+def feat_liberal(html: str, url: str) -> dict:
+    """Extract Liberal fields from the header byline and entry-content."""
+    html_clean = strip_style_scripts(html)
+    am = re.search(
+        r'<a[^>]*class=["\'][^"\']*\bfn\b[^"\']*["\'][^>]*>(.*?)</a>',
+        html_clean,
+        flags=DOTALL_I,
+    ) or re.search(
+        r'<a[^>]*href=["\'][^"\']*/author/[^"\']*["\'][^>]*>(.*?)</a>',
+        html_clean,
+        flags=DOTALL_I,
+    )
+    author = unescape(re.sub(r'<[^>]+>', '', am.group(1)) if am else '')
+    content_match = re.search(r'class=["\'][^"\']*post-\d+[^"\']*["\']', html_clean)
+    section = (
+        '|'.join(re.findall(r'category-([a-z0-9-]+)', content_match.group(0)))
+        if content_match
+        else ''
+    )
+    date_iso = ''
+    heading_match = re.search(
+        r'<h1[^>]*entry-title[^>]*>.*?</h1>', html_clean, flags=DOTALL_I
+    ) or re.search(r'<h1[^>]*>.*?</h1>', html_clean, flags=DOTALL_I)
+    if heading_match:
+        win = re.sub(
+            r'<[^>]+>', ' ', html_clean[heading_match.end() : heading_match.end() + 700]
+        )
+        date_match = re.search(rf'({MONTHS_RE})\s+(\d{{1,2}}),\s+(\d{{4}})', win)
+        if date_match:
+            date_iso = (
+                f'{int(date_match.group(3)):04d}-{MONTH_NUM[date_match.group(1)]:02d}'
+                f'-{int(date_match.group(2)):02d}'
+            )
+    entry_match = LIB_ENTRY_RE.search(html_clean)
+    entry = entry_match.group(1) if entry_match else ''
+    body_raw = visible(entry)
+    wire_match = WIRE_RE.search(body_raw)
+
+    return {
+        'author': author,
+        'date_iso': date_iso,
+        'date_src': 'header' if date_iso else '',
+        'section': section,
+        'body_raw': body_raw,
+        'body_text': '',
+        'is_wire': int(bool(wire_match)),
+        'wire_match': wire_match.group(0) if wire_match else '',
+        'sub_excl': 0,
     }
 
 
