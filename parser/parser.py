@@ -34,6 +34,11 @@ N_WORKERS = 4
 BATCH = 200
 TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
 
+WIRE_RE = re.compile(
+    r'\b(Reuters|Associated Press|AP\b|Agence France|AFP|Press Association|'
+    r'PA Media|Additional reporting by|\bPA\b)'
+)
+
 COLS = [
     'article_id',
     'outlet',
@@ -171,8 +176,9 @@ def feat_rte(html: str, url: str) -> dict:
     segment = segment_match.group(1) if segment_match else ''
     section = '' if re.fullmatch(r'\d{4}', segment) else segment
     body_raw = best_article_body(strip_style_scripts(html))
+    wire_match = WIRE_RE.search(body_raw)
 
-    return date_iso, date_src, author, section, body_raw
+    return date_iso, date_src, author, section, body_raw, wire_match
 
 
 def _row_record(row: tuple) -> dict:
