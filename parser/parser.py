@@ -34,11 +34,6 @@ N_WORKERS = 4
 BATCH = 200
 TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
 
-WIRE_RE = re.compile(
-    r'\b(Reuters|Associated Press|AP\b|Agence France|AFP|Press Association|'
-    r'PA Media|Additional reporting by|\bPA\b)'
-)
-
 COLS = [
     'article_id',
     'outlet',
@@ -62,7 +57,19 @@ COLS = [
     'parse_error',
 ]
 
+# ---------- REGEX VARIABLES ----------
+
 DOTALL_I = re.DOTALL | re.IGNORECASE
+
+RTE_CONSENT_RE = re.compile(r'\s*We need your consent to load.*$', DOTALL_I)
+RTE_ROLE_RE = re.compile(
+    r'(?:[A-Z][\w’\'&.-]*\s+){0,5}'
+    r'(?:Correspondent|Correspondents|Editor|Reporter|Analyst|Desk)\s+'
+)
+WIRE_RE = re.compile(
+    r'\b(Reuters|Associated Press|AP\b|Agence France|AFP|Press Association|'
+    r'PA Media|Additional reporting by|\bPA\b)'
+)
 
 
 def best_article_body(stripped_html: str) -> str:
@@ -154,6 +161,17 @@ def meta_content(html: str, name: str) -> str:
     return meta_match.group(1) if meta_match else ''
 
 
+def _strip_rte(body_raw: str, author: str) -> str:
+    """Drop RTE's consent widget and leading block."""
+    b = RTE_CONSENT_RE.sub('', body_raw).strip()
+    if author and b.startswith(author):
+        b = b[len(author) :].lstrip()
+        rm = RTE_ROLE_RE.match(b)
+        if rm:
+            b = b[rm.end() :]
+    return b.strip()
+
+
 def feat_rte(html: str, url: str) -> dict:
     """Extract RTE fields; date falls back to URL path for live pages."""
     nodes = jsonld_nodes(html)
@@ -178,7 +196,16 @@ def feat_rte(html: str, url: str) -> dict:
     body_raw = best_article_body(strip_style_scripts(html))
     wire_match = WIRE_RE.search(body_raw)
 
-    return date_iso, date_src, author, section, body_raw, wire_match
+    return {
+        'author': author,
+        'date_iso': date_iso,
+        'date_src': date_src,
+        'section': section or 'news',
+        'body_raw': body_raw,
+        'body_text': _strip_rte(body_raw, author),
+        'is_wire': int(bool(wire_match)),
+        'wire_match': wire_match.group(0) if wire_match else '',
+    }
 
 
 def _row_record(row: tuple) -> dict:
