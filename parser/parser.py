@@ -34,6 +34,11 @@ N_WORKERS = 4
 BATCH = 200
 TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
 
+EXTRACT = {
+    'rte': feat_rte,
+    'irish_examiner': feat_examiner,
+}
+
 COLS = [
     'article_id',
     'outlet',
@@ -61,11 +66,19 @@ COLS = [
 
 DOTALL_I = re.DOTALL | re.IGNORECASE
 
+EXAMINER_TAIL_RE = re.compile(
+    r'\s*(Try from only|CONNECT WITH US TODAY|Be the first to know|'
+    r'Sign up for our|Already a subscriber\?\s*Sign in|'
+    r'More in this section).*$',
+    DOTALL_I,
+)
+
 RTE_CONSENT_RE = re.compile(r'\s*We need your consent to load.*$', DOTALL_I)
 RTE_ROLE_RE = re.compile(
     r'(?:[A-Z][\w’\'&.-]*\s+){0,5}'
     r'(?:Correspondent|Correspondents|Editor|Reporter|Analyst|Desk)\s+'
 )
+
 WIRE_RE = re.compile(
     r'\b(Reuters|Associated Press|AP\b|Agence France|AFP|Press Association|'
     r'PA Media|Additional reporting by|\bPA\b)'
@@ -161,6 +174,11 @@ def meta_content(html: str, name: str) -> str:
     return meta_match.group(1) if meta_match else ''
 
 
+def _strip_examiner(body_raw: str) -> str:
+    """Drop the Examiner subscription-promo / newsletter / read-more."""
+    return EXAMINER_TAIL_RE.sub('', body_raw).strip()
+
+
 def _strip_rte(body_raw: str, author: str) -> str:
     """Drop RTE's consent widget and leading block."""
     b = RTE_CONSENT_RE.sub('', body_raw).strip()
@@ -170,6 +188,45 @@ def _strip_rte(body_raw: str, author: str) -> str:
         if rm:
             b = b[rm.end() :]
     return b.strip()
+
+
+def feat_examiner(html: str, url: str) -> dict:
+    """Extract Examiner fields; section (IE-<word>/ stripped)/URL."""
+    nodes = jsonld_nodes(html)
+    article = next(
+        (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
+    )
+    author = unescape(author_name(article.get('author')) or '')
+    date_iso = iso_from_dt(article.get('datePublished') or '')
+    date_src = 'ld' if date_iso else ''
+
+    if not date_iso:
+        date_iso = iso_from_dt(meta_content(html, 'article:published_time'))
+        date_src = 'meta' if date_iso else ''
+
+    section_meta = (
+        re.sub(
+            r'^IE-[a-z]+/', '', meta_content(html, 'article:section'), flags=re.IGNORECASE
+        )
+        .strip()
+        .lower()
+    )
+    section_match = re.search(r'irishexaminer\.com/([^/]+)/', url)
+    section = section_meta or (section_match.group(1) if section_match else '')
+    low = html.lower()
+    body_raw = best_article_body(strip_style_scripts(html))
+    wire_match = WIRE_RE.search(body_raw)
+    return {
+        'author': author,
+        'date_iso': date_iso,
+        'date_src': date_src,
+        'section': section,
+        'body_raw': body_raw,
+        'body_text': _strip_examiner(body_raw),
+        'is_wire': int(bool(wire_match)),
+        'wire_match': wire_match.group(0) if wire_match else '',
+        'sub_excl': int('exclusive subscriber content' in low),
+    }
 
 
 def feat_rte(html: str, url: str) -> dict:
@@ -205,6 +262,7 @@ def feat_rte(html: str, url: str) -> dict:
         'body_text': _strip_rte(body_raw, author),
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
+        'sub_excl': 0,
     }
 
 
@@ -229,7 +287,7 @@ def _row_record(row: tuple) -> dict:
     return record
 
 
-def worker(wid: int) -> int:
+def worker(write_id: int) -> int:
     """Parse the id-stripe id %% N_WORKERS == wid into part_<wid>.csv."""
     connection = sqlite3.connect(f'file:{DB}?mode=ro', uri=True, timeout=60)
     cursor = connection.cursor()
@@ -240,7 +298,7 @@ def worker(wid: int) -> int:
         )
     ]
 
-    path = OUT_DIR / f'part_{wid}.csv'
+    path = OUT_DIR / f'part_{write_id}.csv'
     last_done = 0
     if path.exists():
         with path.open(encoding='utf-8') as part:
@@ -256,9 +314,9 @@ def worker(wid: int) -> int:
     done = True
 
     with path.open('a', newline='', encoding='utf-8') as fh:
-        w = csv.DictWriter(fh, fieldnames=COLS)
-        if wid == 0 and new_file:
-            w.writeheader()
+        write = csv.DictWriter(fh, fieldnames=COLS)
+        if write_id == 0 and new_file:
+            write.writeheader()
         for i in range(0, len(ids), BATCH):
             if TIME_BUDGET and time.time() - current_time > TIME_BUDGET:
                 done = False
@@ -272,7 +330,7 @@ def worker(wid: int) -> int:
                 f'WHERE a.id IN ({placeholders})'
             )
             for db_row in cursor.execute(query, chunk):
-                w.writerow(_row_record(db_row))
+                write.writerow(_row_record(db_row))
                 num += 1
             fh.flush()
 
