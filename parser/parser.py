@@ -130,6 +130,19 @@ def best_article_body(stripped_html: str) -> str:
     return max((p_text(b) for b in blocks), key=len)
 
 
+def flat(data: object) -> list[str]:
+    """Flatten nested lists to a list of strings."""
+    out: list[str] = []
+    stack = [data]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, list):
+            stack.extend(x)
+        elif x:
+            out.append(str(x))
+    return out[::-1]
+
+
 def iso_from_dt(string: str | None) -> str:
     """Return the leading YYYY-MM-DD of a datetime string, or ''."""
     if not string:
@@ -282,6 +295,56 @@ def feat_examiner(html: str, url: str) -> dict:
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
         'sub_excl': int('exclusive subscriber content' in low),
+    }
+
+
+def feat_gript(html: str, url: str) -> dict:
+    """Extract Gript fields from the stored WordPress REST JSON."""
+    data = json.loads(html)
+    content = data.get('content')
+    content = content.get('rendered') if isinstance(content, dict) else (content or '')
+    body_raw = visible(content)
+    date_iso = iso_from_dt(data.get('date_gmt') or '')
+    date_src = 'gmt' if date_iso else ''
+    if not date_iso:
+        date_iso = iso_from_dt(data.get('date') or '')
+        date_src = 'date' if date_iso else ''
+    yoast_head = data.get('yoast_head_json') or {}
+    author = unescape(
+        (yoast_head.get('author') if isinstance(yoast_head, dict) else '') or ''
+    )
+    title = data.get('title')
+    title = title.get('rendered') if isinstance(title, dict) else (title or '')
+    title = unescape(re.sub(r'<[^>]+>', '', str(title)))
+    sections: list[str] = []
+    schema = yoast_head.get('schema') if isinstance(yoast_head, dict) else None
+    if isinstance(schema, dict):
+        for node in schema.get('@graph', []):
+            if isinstance(node, dict) and node.get('articleSection'):
+                sections.extend(flat(node['articleSection']))
+    section = '|'.join(dict.fromkeys(sections))
+    lower_case = content.lower()
+    title_upper = title.upper()
+    is_otd = int(
+        'on this day' in section.lower()
+        or title_upper.startswith(('OTD:', 'ON THIS DAY'))
+    )
+
+    return {
+        'author': author,
+        'date_iso': date_iso,
+        'date_src': date_src,
+        'section': section,
+        'body_raw': body_raw,
+        'body_text': body_raw,
+        'is_wire': 0,
+        'wire_match': '',
+        'sub_excl': 0,
+        'gript_premium': int(
+            'memberful-global-teaser-content' in lower_case
+            or 'premium' in section.lower()
+        ),
+        'is_otd': is_otd,
     }
 
 
