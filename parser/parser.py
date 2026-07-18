@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import time
 
 # Multiprocessing structure suggested and designed by AI for faster parsing.
@@ -28,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
 OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
+OUT_CSV = OUT_DIR / 'parsed_all.csv'
 HTTP_OK = 200
 
 N_WORKERS = 4
@@ -512,18 +514,18 @@ def _row_record(row: tuple) -> dict:
     return record
 
 
-def worker(write_id: int) -> int:
-    """Parse the id-stripe id %% N_WORKERS == wid into part_<wid>.csv."""
+def worker(worker_id: int) -> int:
+    """Parse the id-stripe id %% N_WORKERS == worker_id into part_<worker_id>.csv."""
     connection = sqlite3.connect(f'file:{DB}?mode=ro', uri=True, timeout=60)
     cursor = connection.cursor()
     ids = [
         row[0]
         for row in cursor.execute(
-            f'SELECT id FROM article WHERE (id % {N_WORKERS})={wid} ORDER BY id'
+            f'SELECT id FROM article WHERE (id % {N_WORKERS})={worker_id} ORDER BY id'
         )
     ]
 
-    path = OUT_DIR / f'part_{write_id}.csv'
+    path = OUT_DIR / f'part_{worker_id}.csv'
     last_done = 0
     if path.exists():
         with path.open(encoding='utf-8') as part:
@@ -540,7 +542,7 @@ def worker(write_id: int) -> int:
 
     with path.open('a', newline='', encoding='utf-8') as fh:
         write = csv.DictWriter(fh, fieldnames=COLS)
-        if write_id == 0 and new_file:
+        if worker_id == 0 and new_file:
             write.writeheader()
         for i in range(0, len(ids), BATCH):
             if TIME_BUDGET and time.time() - current_time > TIME_BUDGET:
@@ -559,11 +561,42 @@ def worker(write_id: int) -> int:
                 num += 1
             fh.flush()
 
-    return len(ids)
+    connection.close()
+    remaining = 0 if done else len(ids) - num
+    print(
+        f'w{worker_id} wrote {num}, remaining {remaining}, {time.time() - current_time:.0f}s',
+        flush=True,
+    )
+    return remaining
+
+
+def merge_parts() -> None:
+    """Concatenate the part files into OUT_CSV."""
+    with OUT_CSV.open('w', encoding='utf-8') as output:
+        for worker_id in range(N_WORKERS):
+            output.write((OUT_DIR / f'part_{worker_id}.csv').read_text(encoding='utf-8'))
 
 
 def main() -> int:
-    """Run the parse pass across all workers and merge to ``OUT_CSV``."""
+    """Run the parse pass across all workers and merge to OUT_CSV."""
     current_time = time.time()
+
     with Pool(N_WORKERS) as pool:
         remaining = pool.map(worker, range(N_WORKERS))
+    total_remaining = sum(remaining)
+
+    if total_remaining:
+        print(
+            f'PASS incomplete, remaining={total_remaining},'
+            f' {time.time() - current_time:.0f}s',
+            flush=True,
+        )
+        return 1
+
+    merge_parts()
+    print(f'PARSE DONE -> {OUT_CSV} in {time.time() - t0:.0f}s', flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
