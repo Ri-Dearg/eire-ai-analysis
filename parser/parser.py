@@ -295,6 +295,8 @@ def feat_examiner(html: str, url: str) -> dict:
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
         'sub_excl': int('exclusive subscriber content' in low),
+        'gript_premium': 0,
+        'is_otd': 0,
     }
 
 
@@ -396,6 +398,8 @@ def feat_liberal(html: str, url: str) -> dict:
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
         'sub_excl': 0,
+        'gript_premium': 0,
+        'is_otd': 0,
     }
 
 
@@ -433,6 +437,8 @@ def feat_rte(html: str, url: str) -> dict:
         'is_wire': int(bool(wire_match)),
         'wire_match': wire_match.group(0) if wire_match else '',
         'sub_excl': 0,
+        'gript_premium': 0,
+        'is_otd': 0,
     }
 
 
