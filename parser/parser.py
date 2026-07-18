@@ -13,6 +13,7 @@ once and the easier curation can be re-run freely.
 """
 
 import csv
+import hashlib
 import html as ihtml
 import json
 import os
@@ -34,10 +35,9 @@ N_WORKERS = 4
 BATCH = 200
 TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
 
-EXTRACT = {
-    'rte': feat_rte,
-    'irish_examiner': feat_examiner,
-}
+RELEASE = '2022-11-30'
+TODAY = '2026-06-09'
+
 
 MONTHS = [
     'January',
@@ -157,6 +157,28 @@ def p_text(segment: str) -> str:
     return re.sub(
         r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', ' '.join(ps)))
     ).strip()
+
+
+def period_of(date_iso: str) -> str:
+    """Map an ISO date to a corpus period label.
+
+    Returns one ofout_lo (<2019), pre (2019 .. pre-release),
+    straddle (release .. 2022-12-31), mid (2023-24), post (2025-26),
+    out_hi (after the snapshot), or '' for a missing date.
+    """
+    if not date_iso:
+        return ''
+    if date_iso < '2019-01-01':
+        return 'out_lo'
+    if date_iso < RELEASE:
+        return 'pre'
+    if date_iso <= '2022-12-31':
+        return 'straddle'
+    if date_iso <= '2024-12-31':
+        return 'mid'
+    if date_iso <= TODAY:
+        return 'post'
+    return 'out_hi'
 
 
 def strip_style_scripts(html: str) -> str:
@@ -442,6 +464,14 @@ def feat_rte(html: str, url: str) -> dict:
     }
 
 
+EXTRACT = {
+    'gript': feat_gript,
+    'rte': feat_rte,
+    'irish_examiner': feat_examiner,
+    'the_liberal': feat_liberal,
+}
+
+
 def _row_record(row: tuple) -> dict:
     """Build one record from a (id, outlet, url, curl, status, raw) row."""
     aid, outlet, aurl, curl, status, raw = row
@@ -456,10 +486,29 @@ def _row_record(row: tuple) -> dict:
         record['parse_error'] = f'http_{status}'
         return record
     try:
-        features = feat_rte(raw, curl or aurl)
+        features = EXTRACT[outlet](raw, curl or aurl)
     except Exception as exc:
         record['parse_error'] = type(exc).__name__
         return record
+    body_raw = features['body_raw']
+    body_text = features['body_text']
+    norm = re.sub(r'\s+', ' ', body_raw).strip().lower()
+    record.update(
+        published_date=features['date_iso'],
+        date_src=features['date_src'],
+        period=period_of(features['date_iso']),
+        author=features['author'],
+        section=features['section'],
+        is_wire=features['is_wire'],
+        wire_match=features['wire_match'],
+        is_otd=features['is_otd'],
+        sub_excl=features['sub_excl'],
+        gript_premium=features['gript_premium'],
+        body_len_raw=len(body_raw),
+        body_sha1=hashlib.sha1(norm.encode()).hexdigest() if norm else '',  # noqa: S324
+        word_count=len(body_text.split()),
+        body_text=body_text,
+    )
     return record
 
 
