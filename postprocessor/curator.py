@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import re
 from pathlib import Path
 
@@ -11,6 +12,7 @@ PARSED = DATA / 'parsed_all.csv'
 
 PRE_FINE = ('pre',)
 POST_FINE = ('straddle', 'mid', 'post')
+DROP_OOR = ('out_lo', 'out_hi', '')
 
 MIN_BODY_CHARS = 400
 STUB_MIN_WORDS = 20
@@ -18,6 +20,7 @@ NONPROSE_MIN_WORDS = 120
 NONPROSE_MAX_WPS = 90
 
 _TERM_RE = re.compile(r'[.!?…]')
+_WS_RE = re.compile(r'\s+')
 
 
 def _is_nonprose(body: str, word_count: int) -> bool:
@@ -37,6 +40,20 @@ def _is_nonprose(body: str, word_count: int) -> bool:
     return (
         word_count >= NONPROSE_MIN_WORDS and word_count / terminators > NONPROSE_MAX_WPS
     )
+
+
+def _norm_hash(body: str) -> str:
+    """Return a hash of the body normalised for near-duplicate detection.
+
+    Args:
+        body (str): The article body text.
+
+    Returns:
+        str: SHA1 hex digest of the lower-cased, whitespace-collapsed body.
+
+    """
+    norm = _WS_RE.sub(' ', body.lower()).strip()
+    return hashlib.sha1(norm.encode('utf-8')).hexdigest()  # noqa: S324 Not a security function
 
 
 def drop_reason(row: dict, seen: set[str], seen_norm: set[str]) -> str:  # noqa: PLR0911
@@ -69,7 +86,18 @@ def drop_reason(row: dict, seen: set[str], seen_norm: set[str]) -> str:  # noqa:
         return 'gript_premium'
     if row['outlet'] == 'gript' and row['is_otd'] == '1':
         return 'gript_otd'
-    return 0
+    body_hash = row['body_sha1']
+    if body_hash:
+        if body_hash in seen:
+            return 'dup_body'
+        seen.add(body_hash)
+    norm_hash = _norm_hash(body)
+    if norm_hash in seen_norm:
+        return 'dup_body_norm'
+    seen_norm.add(norm_hash)
+    if row['period_fine'] in DROP_OOR:
+        return 'out_of_range'
+    return ''
 
 
 def gpt_period(fine_period: str) -> str:
