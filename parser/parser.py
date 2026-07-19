@@ -290,6 +290,33 @@ def author_name(article: object) -> str | None:
     return article if isinstance(article, str) else None
 
 
+def _ld_author_date(html: str) -> tuple[str, str, str]:
+    """Return info from the NewsArticle JSON-LD node.
+
+    Shared by the RTE and Examiner extractors: reads the author and
+    datePublished, falling back to the article:published_time meta tag
+    when JSON-LD carries no date.
+
+    Args:
+        html (str): HTML to parse.
+
+    Returns:
+        tuple[str, str, str]: author, date_iso, date_src
+
+    """
+    nodes = jsonld_nodes(html)
+    article = next(
+        (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
+    )
+    author = unescape(author_name(article.get('author')) or '')
+    date_iso = iso_from_dt(article.get('datePublished') or '')
+    date_src = 'ld' if date_iso else ''
+    if not date_iso:
+        date_iso = iso_from_dt(meta_content(html, 'article:published_time'))
+        date_src = 'meta' if date_iso else ''
+    return author, date_iso, date_src
+
+
 def meta_content(html: str, name: str) -> str:
     """Return the content of the <meta> whose name/property is name."""
     esc = re.escape(name)
@@ -339,18 +366,17 @@ def _strip_rte(body_raw: str, author: str) -> str:
 
 
 def feat_examiner(html: str, url: str) -> dict:
-    """Extract Examiner fields; section (IE-<word>/ stripped)/URL."""
-    nodes = jsonld_nodes(html)
-    article = next(
-        (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
-    )
-    author = unescape(author_name(article.get('author')) or '')
-    date_iso = iso_from_dt(article.get('datePublished') or '')
-    date_src = 'ld' if date_iso else ''
+    """Extract Examiner fields; section (IE-<word>/ stripped)/URL.
 
-    if not date_iso:
-        date_iso = iso_from_dt(meta_content(html, 'article:published_time'))
-        date_src = 'meta' if date_iso else ''
+    Args:
+        html (str): Article html.
+        url (str): url for the article.
+
+    Returns:
+        dict: Dict of values for the DB row.
+
+    """
+    author, date_iso, date_src = _ld_author_date(html)
 
     section_meta = (
         re.sub(
@@ -486,17 +512,16 @@ def feat_liberal(html: str, url: str) -> dict:
 
 
 def feat_rte(html: str, url: str) -> dict:
-    """Extract RTE fields; date falls back to URL path for live pages."""
-    nodes = jsonld_nodes(html)
-    article = next(
-        (node for node in nodes if 'NewsArticle' in str(node.get('@type', ''))), {}
-    )
-    author = unescape(author_name(article.get('author')) or '')
-    date_iso = iso_from_dt(article.get('datePublished') or '')
-    date_src = 'ld' if date_iso else ''
-    if not date_iso:
-        date_iso = iso_from_dt(meta_content(html, 'article:published_time'))
-        date_src = 'meta' if date_iso else ''
+    """Extract RTE fields; date falls back to URL path for live pages.
+
+    Args:
+        html (str): _description_
+        url (str): _description_
+
+    Returns:
+        dict: _description_
+    """
+    author, date_iso, date_src = _ld_author_date(html)
     if not date_iso:
         date_match = re.search(r'/news/(?:[^/]+/)?(\d{4})/(\d{2})(\d{2})/', url)
         if date_match:
