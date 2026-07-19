@@ -27,22 +27,23 @@ import time
 # Multiprocessing structure suggested and designed by AI for faster parsing.
 from multiprocessing import Pool
 from pathlib import Path
+from typing import Any
 
+# ---------- DIRECTORIES ----------
 ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
 OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
 OUT_CSV = OUT_DIR / 'parsed_all.csv'
+
+# ---------- RUNNER VARIABLES ----------
 HTTP_OK = 200
-
 N_WORKERS = 4
-
 BATCH = 200
 TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
 
+# ---------- DATE VARIABLES ----------
 RELEASE = '2022-11-30'
 TODAY = '2026-06-09'
-
-
 MONTHS = [
     'January',
     'February',
@@ -57,10 +58,9 @@ MONTHS = [
     'November',
     'December',
 ]
-
 MONTH_NUM = {month: i + 1 for i, month in enumerate(MONTHS)}
 
-
+# ---------- ARTICLE VARIABLES ----------
 COLS = [
     'article_id',
     'outlet',
@@ -85,7 +85,6 @@ COLS = [
 ]
 
 # ---------- REGEX VARIABLES ----------
-
 DOTALL_I = re.DOTALL | re.IGNORECASE
 
 EXAMINER_TAIL_RE = re.compile(
@@ -126,16 +125,33 @@ WIRE_RE = re.compile(
 )
 
 
+# ---------- HTML PARSING ----------
 def best_article_body(stripped_html: str) -> str:
-    """Return the longest <article> block's <p> text (else whole page)."""
+    """Return the longest <article> block's <p> text (else whole page).
+
+    Args:
+        stripped_html (str): HTML stripped of style/script blocks.
+
+    Returns:
+        str: paragraph text blocks.
+
+    """
     blocks = re.findall(r'<article\b[^>]*>(.*?)</article>', stripped_html, flags=DOTALL_I)
     if not blocks:
         return p_text(stripped_html)
-    return max((p_text(b) for b in blocks), key=len)
+    return max((p_text(block) for block in blocks), key=len)
 
 
 def flat(data: object) -> list[str]:
-    """Flatten nested lists to a list of strings."""
+    """Flatten nested lists to a list of strings.
+
+    Args:
+        data (object): nested lists or dicts.
+
+    Returns:
+        list[str]: Simple list of strings.
+
+    """
     out: list[str] = []
     stack = [data]
     while stack:
@@ -148,11 +164,53 @@ def flat(data: object) -> list[str]:
 
 
 def iso_from_dt(string: str | None) -> str:
-    """Return the leading YYYY-MM-DD of a datetime string, or ''."""
+    """Return the leading YYYY-MM-DD of a datetime string, or ''.
+
+    Args:
+        string (str | None): datetime string
+
+    Returns:
+        str: iso datetime as string
+
+    """
     if not string:
         return ''
     date_match = re.match(r'(\d{4})-(\d{2})-(\d{2})', string)
     return date_match.group(0) if date_match else ''
+
+
+def jsonld_nodes(html: str) -> list[dict]:
+    """Return all JSON nodes in html.
+
+    Parses with strict=False because Examiner blocks carry literal
+    control characters that fail strict JSON.
+
+    Args:
+        html (str): HTML made up of JsonDL nodes.
+
+    Returns:
+        list[dict]: A list of JsonDL nodes as dicts.
+
+    """
+    nodes: list[dict] = []
+    for block in re.findall(
+        r'<script[^>]*application/ld\+json[^>]*>(.*?)</script>', html, flags=DOTALL_I
+    ):
+        try:
+            data = json.loads(block.strip(), strict=False)
+        except (ValueError, TypeError):
+            continue
+        stack = [data]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                if '@graph' in item:
+                    stack.extend(item['@graph'])
+                else:
+                    nodes.append(item)
+            elif isinstance(item, list):
+                stack.extend(item)
+    return nodes
 
 
 def p_text(segment: str) -> str:
@@ -166,9 +224,16 @@ def p_text(segment: str) -> str:
 def period_of(date_iso: str) -> str:
     """Map an ISO date to a corpus period label.
 
-    Returns one ofout_lo (<2019), pre (2019 .. pre-release),
+    Returns one of out_lo (<2019), pre (2019 .. pre-release),
     straddle (release .. 2022-12-31), mid (2023-24), post (2025-26),
     out_hi (after the snapshot), or '' for a missing date.
+
+    Args:
+        date_iso (str): ISO format datetime.
+
+    Returns:
+        str: pre or post ChatGPT period.
+
     """
     if not date_iso:
         return ''
@@ -196,38 +261,12 @@ def unescape(string: object) -> str:
     return ihtml.unescape(str(string or '')).strip()
 
 
-def visible(seg: str) -> str:
+def visible(segment: str) -> str:
     """Strip tags and collapse whitespace to visible text."""
-    return re.sub(r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', seg))).strip()
+    return re.sub(r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', segment))).strip()
 
 
-def jsonld_nodes(html: str) -> list[dict]:
-    """Return all JSON nodes in html.
-
-    Parses with strict=False because Examiner blocks carry literal
-    control characters that fail strict JSON.
-    """
-    nodes: list[dict] = []
-    for block in re.findall(
-        r'<script[^>]*application/ld\+json[^>]*>(.*?)</script>', html, flags=DOTALL_I
-    ):
-        try:
-            data = json.loads(block.strip(), strict=False)
-        except (ValueError, TypeError):
-            continue
-        stack = [data]
-        while stack:
-            item = stack.pop()
-            if isinstance(item, dict):
-                if '@graph' in item:
-                    stack.extend(item['@graph'])
-                else:
-                    nodes.append(item)
-            elif isinstance(item, list):
-                stack.extend(item)
-    return nodes
-
-
+# ---------- CONTENT PARSING ----------
 def author_name(article: object) -> str | None:
     """Resolve a JSON-LD author value (dict/list/str) to a name."""
     if isinstance(article, dict):
@@ -255,6 +294,7 @@ def meta_content(html: str, name: str) -> str:
     return meta_match.group(1) if meta_match else ''
 
 
+# ---------- OUTLET SPECIFIC PARSING ----------
 def _strip_examiner(body_raw: str) -> str:
     """Drop the Examiner subscription-promo / newsletter / read-more."""
     return EXAMINER_TAIL_RE.sub('', body_raw).strip()
@@ -330,7 +370,9 @@ def feat_gript(html: str, url: str) -> dict:
     """Extract Gript fields from the stored WordPress REST JSON."""
     data = json.loads(html)
     content = data.get('content')
-    content = content.get('rendered') if isinstance(content, dict) else (content or '')
+    content: Any = (
+        content.get('rendered') if isinstance(content, dict) else (content or '')
+    )
     body_raw = visible(content)
     date_iso = iso_from_dt(data.get('date_gmt') or '')
     date_src = 'gmt' if date_iso else ''
@@ -476,10 +518,11 @@ EXTRACT = {
 }
 
 
+# ---------- DATABASE RECORDING ----------
 def _row_record(row: tuple) -> dict:
     """Build one record from a (id, outlet, url, curl, status, raw) row."""
     aid, outlet, aurl, curl, status, raw = row
-    record = dict.fromkeys(COLS, '')
+    record: dict[str, str | int] = dict.fromkeys(COLS, '')
     record.update(
         article_id=aid, outlet=outlet, url=aurl, url_canonical=curl, http_status=status
     )
@@ -523,7 +566,7 @@ def worker(worker_id: int) -> int:
     ids = [
         row[0]
         for row in cursor.execute(
-            f'SELECT id FROM article WHERE (id % {N_WORKERS})={worker_id} ORDER BY id'
+            f'SELECT id FROM article WHERE (id % {N_WORKERS})={worker_id} ORDER BY id'  # noqa: S608
         )
     ]
 
@@ -553,7 +596,7 @@ def worker(worker_id: int) -> int:
             chunk = ids[i : i + BATCH]
             placeholders = ','.join('?' * len(chunk))
             query = (
-                'SELECT a.id, o.name, a.url, a.url_canonical, r.http_status, '
+                'SELECT a.id, o.name, a.url, a.url_canonical, r.http_status, '  # noqa: S608
                 'r.raw_html FROM article a JOIN outlet o ON o.id=a.outlet_id '
                 'LEFT JOIN raw_page r ON r.article_id=a.id '
                 f'WHERE a.id IN ({placeholders})'
@@ -566,7 +609,8 @@ def worker(worker_id: int) -> int:
     connection.close()
     remaining = 0 if done else len(ids) - num
     print(
-        f'w{worker_id} wrote {num}, remaining {remaining}, {time.time() - current_time:.0f}s',
+        f'w{worker_id} wrote {num}, remaining '
+        f'{remaining}, {time.time() - current_time:.0f}s',
         flush=True,
     )
     return remaining
