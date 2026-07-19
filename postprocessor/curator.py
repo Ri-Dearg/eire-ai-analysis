@@ -119,6 +119,22 @@ def gpt_period(fine_period: str) -> str:
     return ''
 
 
+def label_drops(rows: list[dict]) -> None:
+    """Annotate each row in place with drop_reason (dedup earliest-first).
+
+    Args:
+        rows (list[dict]): Rows to have labels examined and processed for dropping.
+
+    """
+    seen: set[str] = set()
+    seen_norm: set[str] = set()
+    ordered_rows = sorted(
+        rows, key=lambda x: (x['published_date'] or '9999', int(x['article_id']))
+    )
+    for row in ordered_rows:
+        row['drop_reason'] = drop_reason(row, seen, seen_norm)
+
+
 def main() -> int:
     """Run the curation and write the index plus the pre/post corpus."""
     with PARSED.open(encoding='utf-8') as fh:
@@ -128,4 +144,5 @@ def main() -> int:
         row['period'] = gpt_period(row['period'])
         row['year'] = (row['published_date'] or '')[:4]
         row['month'] = (row['published_date'] or '')[:7]
+    label_drops(rows)
     return 0
