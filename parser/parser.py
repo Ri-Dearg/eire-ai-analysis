@@ -335,7 +335,70 @@ def meta_content(html: str, name: str) -> str:
     return meta_match.group(1) if meta_match else ''
 
 
+def _wire(body_raw: str) -> tuple[int, str]:
+    """Return (is_wire, matched_text) from scanning body_raw for wire credits.
+
+    Args:
+        body_raw (str): Raw article content.
+
+    Returns:
+        tuple[int, str]: 0 or 1 based on whether it is a wire or not, the wire match.
+
+    """
+    match = WIRE_RE.search(body_raw)
+    return int(bool(match)), (match.group(0) if match else '')
+
+
 # ---------- OUTLET SPECIFIC PARSING ----------
+def _features(  # noqa: PLR0913
+    *,
+    body_raw: str,
+    body_text: str,
+    date_iso: str,
+    date_src: str = '',
+    author: str = '',
+    section: str = '',
+    is_wire: int = 0,
+    wire_match: str = '',
+    sub_excl: int = 0,
+    gript_premium: int = 0,
+    is_otd: int = 0,
+) -> dict:
+    """Assemble the feature dict consumed by _row_record.
+
+    Centralises the feature returns, so each extractor sets only the fields that differ.
+
+    Args:
+        body_raw (str): _description_
+        body_text (str): _description_
+        date_iso (str): _description_
+        date_src (str, optional): _description_. Defaults to ''.
+        author (str, optional): _description_. Defaults to ''.
+        section (str, optional): _description_. Defaults to ''.
+        is_wire (int, optional): _description_. Defaults to 0.
+        wire_match (str, optional): _description_. Defaults to ''.
+        sub_excl (int, optional): _description_. Defaults to 0.
+        gript_premium (int, optional): _description_. Defaults to 0.
+        is_otd (int, optional): _description_. Defaults to 0.
+
+    Returns:
+        dict: _description_
+    """
+    return {
+        'author': author,
+        'date_iso': date_iso,
+        'date_src': date_src,
+        'section': section,
+        'body_raw': body_raw,
+        'body_text': body_text,
+        'is_wire': is_wire,
+        'wire_match': wire_match,
+        'sub_excl': sub_excl,
+        'gript_premium': gript_premium,
+        'is_otd': is_otd,
+    }
+
+
 def _strip_examiner(body_raw: str) -> str:
     """Drop the Examiner subscription-promo / newsletter / read-more."""
     return EXAMINER_TAIL_RE.sub('', body_raw).strip()
@@ -389,7 +452,7 @@ def feat_examiner(html: str, url: str) -> dict:
     section = section_meta or (section_match.group(1) if section_match else '')
     low = html.lower()
     body_raw = best_article_body(strip_style_scripts(html))
-    wire_match = WIRE_RE.search(body_raw)
+    is_wire, wire_match = _wire(body_raw)
 
     return {
         'author': author,
@@ -398,8 +461,8 @@ def feat_examiner(html: str, url: str) -> dict:
         'section': section,
         'body_raw': body_raw,
         'body_text': _strip_examiner(body_raw),
-        'is_wire': int(bool(wire_match)),
-        'wire_match': wire_match.group(0) if wire_match else '',
+        'is_wire': is_wire,
+        'wire_match': wire_match,
         'sub_excl': int('exclusive subscriber content' in low),
         'gript_premium': 0,
         'is_otd': 0,
@@ -494,7 +557,7 @@ def feat_liberal(html: str, url: str) -> dict:
     entry_match = LIB_ENTRY_RE.search(html_clean)
     entry = entry_match.group(1) if entry_match else ''
     body_raw = _detag(entry)
-    wire_match = WIRE_RE.search(body_raw)
+    is_wire, wire_match = _wire(body_raw)
 
     return {
         'author': author,
@@ -503,8 +566,8 @@ def feat_liberal(html: str, url: str) -> dict:
         'section': section,
         'body_raw': body_raw,
         'body_text': _strip_liberal(entry),
-        'is_wire': int(bool(wire_match)),
-        'wire_match': wire_match.group(0) if wire_match else '',
+        'is_wire': is_wire,
+        'wire_match': wire_match,
         'sub_excl': 0,
         'gript_premium': 0,
         'is_otd': 0,
@@ -532,7 +595,7 @@ def feat_rte(html: str, url: str) -> dict:
     segment = segment_match.group(1) if segment_match else ''
     section = '' if re.fullmatch(r'\d{4}', segment) else segment
     body_raw = best_article_body(strip_style_scripts(html))
-    wire_match = WIRE_RE.search(body_raw)
+    is_wire, wire_match = _wire(body_raw)
 
     return {
         'author': author,
@@ -541,8 +604,8 @@ def feat_rte(html: str, url: str) -> dict:
         'section': section or 'news',
         'body_raw': body_raw,
         'body_text': _strip_rte(body_raw, author),
-        'is_wire': int(bool(wire_match)),
-        'wire_match': wire_match.group(0) if wire_match else '',
+        'is_wire': is_wire,
+        'wire_match': wire_match,
         'sub_excl': 0,
         'gript_premium': 0,
         'is_otd': 0,
