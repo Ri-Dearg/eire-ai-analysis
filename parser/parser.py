@@ -142,6 +142,19 @@ def best_article_body(stripped_html: str) -> str:
     return max((p_text(block) for block in blocks), key=len)
 
 
+def _detag(segment: str) -> str:
+    """Strip HTML tags, unescape entities, and collapse whitespace to one line.
+
+    Args:
+        segment (str): segment of text to strip tags from
+
+    Returns:
+        str: Segment without tags.
+
+    """
+    return re.sub(r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', segment))).strip()
+
+
 def flat(data: object) -> list[str]:
     """Flatten nested lists to a list of strings.
 
@@ -214,11 +227,17 @@ def jsonld_nodes(html: str) -> list[dict]:
 
 
 def p_text(segment: str) -> str:
-    """Return concatenated visible text of the <p> tags in segment."""
+    """Return concatenated visible text of the <p> tags in segment.
+
+    Args:
+        segment (str): String segment with p tags.
+
+    Returns:
+        str: Text without p tags.
+
+    """
     ps = re.findall(r'<p\b[^>]*>(.*?)</p>', segment, flags=DOTALL_I)
-    return re.sub(
-        r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', ' '.join(ps)))
-    ).strip()
+    return _detag(' '.join(ps))
 
 
 def period_of(date_iso: str) -> str:
@@ -259,11 +278,6 @@ def strip_style_scripts(html: str) -> str:
 def unescape(string: object) -> str:
     """HTML-unescape and strip; tolerate None."""
     return ihtml.unescape(str(string or '')).strip()
-
-
-def visible(segment: str) -> str:
-    """Strip tags and collapse whitespace to visible text."""
-    return re.sub(r'\s+', ' ', ihtml.unescape(re.sub(r'<[^>]+>', ' ', segment))).strip()
 
 
 # ---------- CONTENT PARSING ----------
@@ -373,7 +387,7 @@ def feat_gript(html: str, url: str) -> dict:
     content: Any = (
         content.get('rendered') if isinstance(content, dict) else (content or '')
     )
-    body_raw = visible(content)
+    body_raw = _detag(content)
     date_iso = iso_from_dt(data.get('date_gmt') or '')
     date_src = 'gmt' if date_iso else ''
     if not date_iso:
@@ -453,7 +467,7 @@ def feat_liberal(html: str, url: str) -> dict:
             )
     entry_match = LIB_ENTRY_RE.search(html_clean)
     entry = entry_match.group(1) if entry_match else ''
-    body_raw = visible(entry)
+    body_raw = _detag(entry)
     wire_match = WIRE_RE.search(body_raw)
 
     return {
