@@ -115,7 +115,7 @@ MONTHS_RE = '|'.join(MONTHS)
 
 RTE_CONSENT_RE = re.compile(r'\s*We need your consent to load.*$', DOTALL_I)
 RTE_ROLE_RE = re.compile(
-    r'(?:[A-Z][\w’\'&.-]*\s+){0,5}'
+    r'(?:[A-Z][\w’\'&.-]*\s+){0,5}'  # noqa: RUF001
     r'(?:Correspondent|Correspondents|Editor|Reporter|Analyst|Desk)\s+'
 )
 
@@ -240,7 +240,7 @@ def p_text(segment: str) -> str:
     return _detag(' '.join(ps))
 
 
-def period_of(date_iso: str) -> str:
+def period_of(date_iso: str) -> str:  # noqa: PLR0911
     """Map an ISO date to a corpus period label.
 
     Returns one of out_lo (<2019), pre (2019 .. pre-release),
@@ -270,19 +270,42 @@ def period_of(date_iso: str) -> str:
 
 
 def strip_style_scripts(html: str) -> str:
-    """Return h with <script> and <style> blocks removed."""
+    """Return html with <script> and <style> blocks removed.
+
+    Args:
+        html (str): html
+
+    Returns:
+        str: Html with style and script stripped.
+
+    """
     html = re.sub(r'<script\b[^>]*>.*?</script>', ' ', html, flags=DOTALL_I)
     return re.sub(r'<style\b[^>]*>.*?</style>', ' ', html, flags=DOTALL_I)
 
 
 def unescape(string: object) -> str:
-    """HTML-unescape and strip; tolerate None."""
+    """HTML-unescape and strip; tolerate None.
+
+    Args:
+        string (object): String to enescape.
+
+    Returns:
+        str: String with items unescaped.
+    """
     return ihtml.unescape(str(string or '')).strip()
 
 
 # ---------- CONTENT PARSING ----------
 def author_name(article: object) -> str | None:
-    """Resolve a JSON-LD author value (dict/list/str) to a name."""
+    """Resolve a JSON-LD author value (dict/list/str) to a name.
+
+    Args:
+        article (object): Article object.
+
+    Returns:
+        str | None: Author's name.
+
+    """
     if isinstance(article, dict):
         return article.get('name')
     if isinstance(article, list) and article:
@@ -368,7 +391,16 @@ def _ld_author_date(html: str) -> tuple[str, str, str]:
 
 
 def meta_content(html: str, name: str) -> str:
-    """Return the content of the <meta> whose name/property is name."""
+    """Return the content of the <meta> whose name/property is name.
+
+    Args:
+        html (str): HTML content.
+        name (str): Name of meta content.
+
+    Returns:
+        str: Meta Content parsed.
+
+    """
     esc = re.escape(name)
     meta_match = re.search(
         rf'<meta[^>]*(?:name|property)=["\']{esc}["\'][^>]*content=["\']([^"\']*)',
@@ -401,7 +433,15 @@ def _wire(body_raw: str) -> tuple[int, str]:
 
 # ---------- OUTLET SPECIFIC PARSING ----------
 def _strip_examiner(body_raw: str) -> str:
-    """Drop the Examiner subscription-promo / newsletter / read-more."""
+    """Drop the Examiner subscription-promo / newsletter / read-more.
+
+    Args:
+        body_raw (str): Raw article body.
+
+    Returns:
+        str: Raw body without examiner tail.
+
+    """
     return EXAMINER_TAIL_RE.sub('', body_raw).strip()
 
 
@@ -410,6 +450,13 @@ def _strip_liberal(entry_html: str) -> str:
 
     Extracts <p> prose from the entry-content region
     removes the inline donation widget, and trims the leading Image source.
+
+    Args:
+        entry_html (str): HTML at the start of the page.
+
+    Returns:
+        str: Entry without the extra prose content.
+
     """
     b = p_text(entry_html)
     b = LIB_DONATION_RE.sub(' ', b)
@@ -419,14 +466,23 @@ def _strip_liberal(entry_html: str) -> str:
 
 
 def _strip_rte(body_raw: str, author: str) -> str:
-    """Drop RTE's consent widget and leading block."""
-    b = RTE_CONSENT_RE.sub('', body_raw).strip()
-    if author and b.startswith(author):
-        b = b[len(author) :].lstrip()
-        rm = RTE_ROLE_RE.match(b)
-        if rm:
-            b = b[rm.end() :]
-    return b.strip()
+    """Drop RTE's consent widget and leading block.
+
+    Args:
+        body_raw (str): Raw article body
+        author (str): Author name.
+
+    Returns:
+        str: Article without widget.
+
+    """
+    block = RTE_CONSENT_RE.sub('', body_raw).strip()
+    if author and block.startswith(author):
+        block = block[len(author) :].lstrip()
+        rte_match = RTE_ROLE_RE.match(block)
+        if rte_match:
+            block = block[rte_match.end() :]
+    return block.strip()
 
 
 def feat_examiner(html: str, url: str) -> dict:
@@ -468,8 +524,17 @@ def feat_examiner(html: str, url: str) -> dict:
     )
 
 
-def feat_gript(html: str, url: str) -> dict:
-    """Extract Gript fields from the stored WordPress REST JSON."""
+def feat_gript(html: str, url: str) -> dict:  # noqa: ARG001
+    """Extract Gript fields from the stored WordPress REST JSON.
+
+    Args:
+        html (str): HTML of article.
+        url (str): URL of article.
+
+    Returns:
+        dict: Features for article rows.
+
+    """
     data = json.loads(html)
     content = data.get('content')
     content: Any = (
@@ -517,8 +582,17 @@ def feat_gript(html: str, url: str) -> dict:
     )
 
 
-def feat_liberal(html: str, url: str) -> dict:
-    """Extract Liberal fields from the header byline and entry-content."""
+def feat_liberal(html: str, url: str) -> dict:  # noqa: ARG001
+    """Extract Liberal fields from the header byline and entry-content.
+
+    Args:
+        html (str): HTML of article.
+        url (str): URL of article.
+
+    Returns:
+        dict: Features for article rows.
+
+    """
     html_clean = strip_style_scripts(html)
     am = re.search(
         r'<a[^>]*class=["\'][^"\']*\bfn\b[^"\']*["\'][^>]*>(.*?)</a>',
@@ -571,11 +645,12 @@ def feat_rte(html: str, url: str) -> dict:
     """Extract RTE fields; date falls back to URL path for live pages.
 
     Args:
-        html (str): _description_
-        url (str): _description_
+        html (str): Article html.
+        url (str): url for the article.
 
     Returns:
-        dict: _description_
+        dict: Dict of values for the DB row.
+
     """
     author, date_iso, date_src = _ld_author_date(html)
     if not date_iso:
@@ -612,7 +687,15 @@ EXTRACT = {
 
 # ---------- DATABASE RECORDING ----------
 def _row_record(row: tuple) -> dict:
-    """Build one record from a (id, outlet, url, curl, status, raw) row."""
+    """Build one record from a (id, outlet, url, curl, status, raw) row.
+
+    Args:
+        row (tuple): Features of one row.
+
+    Returns:
+        dict: Complete record to output.
+
+    """
     aid, outlet, aurl, curl, status, raw = row
     record: dict[str, str | int] = dict.fromkeys(COLS, '')
     record.update(
@@ -626,7 +709,7 @@ def _row_record(row: tuple) -> dict:
         return record
     try:
         features = EXTRACT[outlet](raw, curl or aurl)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         record['parse_error'] = type(exc).__name__
         return record
     body_raw = features['body_raw']
@@ -652,7 +735,15 @@ def _row_record(row: tuple) -> dict:
 
 
 def worker(worker_id: int) -> int:
-    """Parse the id-stripe id %% N_WORKERS == worker_id into part_<worker_id>.csv."""
+    """Parse the id-stripe id %% N_WORKERS == worker_id into part_<worker_id>.csv.
+
+    Args:
+        worker_id (int): ID number of runnign worker.
+
+    Returns:
+        int: Remaining parts.
+
+    """
     connection = sqlite3.connect(f'file:{DB}?mode=ro', uri=True, timeout=60)
     cursor = connection.cursor()
     ids = [
@@ -716,7 +807,12 @@ def merge_parts() -> None:
 
 
 def main() -> int:
-    """Run the parse pass across all workers and merge to OUT_CSV."""
+    """Run the parse pass across all workers and merge to OUT_CSV.
+
+    Returns:
+        int: Complete or complete run.
+
+    """
     current_time = time.time()
 
     with Pool(N_WORKERS) as pool:
