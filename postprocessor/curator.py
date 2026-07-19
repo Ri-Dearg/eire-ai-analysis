@@ -135,6 +135,20 @@ def label_drops(rows: list[dict]) -> None:
         row['drop_reason'] = drop_reason(row, seen, seen_norm)
 
 
+def _write_index(rows: list[dict]) -> None:
+    """Write the article drop index.
+
+    Args:
+        rows (list[dict]): Rows to be examined for the index.
+
+    """
+    cols = ['article_id', 'outlet', 'period_fine', 'period', 'is_wire', 'drop_reason']
+    with (DATA / 'parsed_index.csv').open('w', newline='', encoding='utf-8') as indexed:
+        write = csv.writer(indexed)
+        write.writerow(cols)
+        write.writerows([row[col] for col in cols] for row in rows)
+
+
 def main() -> int:
     """Run the curation and write the index plus the pre/post corpus."""
     with PARSED.open(encoding='utf-8') as fh:
@@ -145,4 +159,5 @@ def main() -> int:
         row['year'] = (row['published_date'] or '')[:4]
         row['month'] = (row['published_date'] or '')[:7]
     label_drops(rows)
+    _write_index(rows)
     return 0
