@@ -287,10 +287,11 @@ def unescape(string: object) -> str:
     """HTML-unescape and strip; tolerate None.
 
     Args:
-        string (object): String to enescape.
+        string (object): String to unescape.
 
     Returns:
         str: String with items unescaped.
+
     """
     return ihtml.unescape(str(string or '')).strip()
 
@@ -738,7 +739,7 @@ def worker(worker_id: int) -> int:
     """Parse the id-stripe id %% N_WORKERS == worker_id into part_<worker_id>.csv.
 
     Args:
-        worker_id (int): ID number of runnign worker.
+        worker_id (int): ID number of running worker.
 
     Returns:
         int: Remaining parts.
