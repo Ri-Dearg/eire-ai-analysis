@@ -18,6 +18,7 @@ import csv
 import hashlib
 import html as ihtml
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -28,6 +29,8 @@ import time
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ---------- DIRECTORIES ----------
 ROOT = Path(__file__).resolve().parent.parent
@@ -792,10 +795,12 @@ def worker(worker_id: int) -> int:
 
     connection.close()
     remaining = 0 if done else len(ids) - num
-    print(
-        f'w{worker_id} wrote {num}, remaining '
-        f'{remaining}, {time.time() - current_time:.0f}s',
-        flush=True,
+    logger.info(
+        'w%s wrote %s, remaining %s, %s}s',
+        worker_id,
+        num,
+        remaining,
+        time.time() - current_time,
     )
     return remaining
 
@@ -821,15 +826,15 @@ def main() -> int:
     total_remaining = sum(remaining)
 
     if total_remaining:
-        print(
-            f'PASS incomplete, remaining={total_remaining},'
-            f' {time.time() - current_time:.0f}s',
-            flush=True,
+        logger.info(
+            'PASS incomplete, remaining=%s, %s}s',
+            total_remaining,
+            time.time() - current_time,
         )
         return 1
 
     merge_parts()
-    print(f'PARSE DONE -> {OUT_CSV} in {time.time() - current_time:.0f}s', flush=True)
+    logger.info('PARSE DONE -> %s in %s}s', OUT_CSV, time.time() - current_time)
     return 0
 
 
