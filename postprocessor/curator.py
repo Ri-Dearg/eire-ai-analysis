@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import logging
 import re
+from collections import Counter, defaultdict
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------- DIRECTORIES ----------
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
 PARSED = DATA / 'parsed_all.csv'
+
+OUTLETS = ('gript', 'irish_examiner', 'rte', 'the_liberal')
 
 PRE_FINE = ('pre',)
 POST_FINE = ('straddle', 'mid', 'post')
@@ -135,6 +141,7 @@ def label_drops(rows: list[dict]) -> None:
         row['drop_reason'] = drop_reason(row, seen, seen_norm)
 
 
+# Suggested by AI.
 def _write_index(rows: list[dict]) -> None:
     """Write the article drop index.
 
@@ -160,4 +167,17 @@ def main() -> int:
         row['month'] = (row['published_date'] or '')[:7]
     label_drops(rows)
     _write_index(rows)
+
+    logger.info('drop reasons: %s', dict(Counter(row['drop_reason'] for row in rows)))
+
+    usable_rows = [row for row in rows if not row['drop_reason']]
+
+    logger.info('usable rows: %d', len(usable_rows))
+
+    cell: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for row in usable_rows:
+        cell[row['outlet']][row['period']] += 1
+    print(f'{"outlet":16}{"pre":>8}{"post":>8}')
+    for outlet in OUTLETS:
+        print(f'{outlet:16}{cell[outlet]["pre"]:>8}{cell[outlet]["post"]:>8}')
     return 0
