@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 # ---------- DIRECTORIES ----------
@@ -13,6 +14,29 @@ POST_FINE = ('straddle', 'mid', 'post')
 
 MIN_BODY_CHARS = 400
 STUB_MIN_WORDS = 20
+NONPROSE_MIN_WORDS = 120
+NONPROSE_MAX_WPS = 90
+
+_TERM_RE = re.compile(r'[.!?…]')
+
+
+def _is_nonprose(body: str, word_count: int) -> bool:
+    """Return True when a body reads as non-prose (a table or unstructured dump).
+
+    Args:
+        body (str): The article body text.
+        word_count (int): Pre-computed word count of ``body``.
+
+    Returns:
+        bool: True if the body should be dropped as non-prose.
+
+    """
+    terminators = len(_TERM_RE.findall(body))
+    if terminators == 0:
+        return True
+    return (
+        word_count >= NONPROSE_MIN_WORDS and word_count / terminators > NONPROSE_MAX_WPS
+    )
 
 
 def drop_reason(row: dict, seen: set[str], seen_norm: set[str]) -> str:  # noqa: PLR0911
@@ -37,6 +61,14 @@ def drop_reason(row: dict, seen: set[str], seen_norm: set[str]) -> str:  # noqa:
     word_count = len(body.split())
     if word_count < STUB_MIN_WORDS:
         return 'stub'
+    if _is_nonprose(body, word_count):
+        return 'nonprose'
+    if row['outlet'] == 'irish_examiner' and row['sub_excl'] == '1':
+        return 'sub_exclusive'
+    if row['outlet'] == 'gript' and row['gript_premium'] == '1':
+        return 'gript_premium'
+    if row['outlet'] == 'gript' and row['is_otd'] == '1':
+        return 'gript_otd'
     return 0
 
 
