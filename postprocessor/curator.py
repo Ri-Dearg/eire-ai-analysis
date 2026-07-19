@@ -11,6 +11,34 @@ PARSED = DATA / 'parsed_all.csv'
 PRE_FINE = ('pre',)
 POST_FINE = ('straddle', 'mid', 'post')
 
+MIN_BODY_CHARS = 400
+STUB_MIN_WORDS = 20
+
+
+def drop_reason(row: dict, seen: set[str], seen_norm: set[str]) -> str:  # noqa: PLR0911
+    """Return the first applicable drop reason for a row, or '' if it survives.
+
+    Args:
+        row (dict): The article row.
+        seen (set[str]): Raw body sha1 hashes already kept.
+        seen_norm (set[str]): Normalised body hashes already kept.
+
+    Returns:
+        str: The drop reason, or '' if the row is kept.
+
+    """
+    if row['parse_error'] or row['http_status'] != '200':
+        return 'non200_or_noraw'
+    if int(row['body_len_raw'] or 0) < MIN_BODY_CHARS:
+        return 'thin_lt400'
+    body = row['body_text']
+    if not body.strip():
+        return 'empty_clean_body'
+    word_count = len(body.split())
+    if word_count < STUB_MIN_WORDS:
+        return 'stub'
+    return 0
+
 
 def gpt_period(fine_period: str) -> str:
     """Collapse a fine period_of() label to binary pre / post (or '').
