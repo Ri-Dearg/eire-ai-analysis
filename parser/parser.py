@@ -12,6 +12,8 @@ single CSV with one row per article and no drop decisions,so the body pass runs
 once and the easier curation can be re-run freely.
 """
 
+from __future__ import annotations
+
 import csv
 import hashlib
 import html as ihtml
@@ -594,7 +596,7 @@ def main() -> int:
         return 1
 
     merge_parts()
-    print(f'PARSE DONE -> {OUT_CSV} in {time.time() - t0:.0f}s', flush=True)
+    print(f'PARSE DONE -> {OUT_CSV} in {time.time() - current_time:.0f}s', flush=True)
     return 0
 
 
