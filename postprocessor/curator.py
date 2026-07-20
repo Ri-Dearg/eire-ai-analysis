@@ -24,6 +24,21 @@ PRE_FINE = ('pre',)
 POST_FINE = ('straddle', 'mid', 'post')
 DROP_OOR = ('out_lo', 'out_hi', '')
 
+CORPUS_COLS = [
+    'article_id',
+    'url_canonical',
+    'outlet',
+    'published_date',
+    'year',
+    'month',
+    'period',
+    'section',
+    'author',
+    'is_wire',
+    'word_count',
+    'body_text',
+]
+
 MIN_BODY_CHARS = 400
 STUB_MIN_WORDS = 20
 NONPROSE_MIN_WORDS = 120
@@ -145,6 +160,32 @@ def label_drops(rows: list[dict]) -> None:
         row['drop_reason'] = drop_reason(row, seen, seen_norm)
 
 
+def build(rows: list[dict]) -> tuple[list[dict], int]:
+    """Balance the usable rows into equal pre/post cells per outlet.
+
+    The common cell size is the smallest outlet x period cell. Returns the selected
+    rows and that per-cell size.
+
+    Args:
+        rows (list[dict]): rows to stratify.
+
+    Returns:
+        tuple[list[dict], int]: stratified rows, min number of cells to produce.
+
+    """
+    rng = random.Random(SEED)
+    cells: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        if not row['drop_reason'] and row['period'] in PERIODS:
+            cells[row['outlet'], row['period']].append(row)
+    target = min(len(cells[outlet, period]) for outlet in OUTLETS for period in PERIODS)
+    output: list[dict] = []
+    for outlet in OUTLETS:
+        for period in PERIODS:
+            output.extend(stratified_pick(cells[outlet, period], target, rng))
+    return output, target
+
+
 def stratified_pick(rows: list[dict], target: int, rng: random.Random) -> list[dict]:
     """Pick target rows from rows, stratified by year+month.
 
@@ -193,32 +234,6 @@ def _write_index(rows: list[dict]) -> None:
         write = csv.writer(indexed)
         write.writerow(cols)
         write.writerows([row[col] for col in cols] for row in rows)
-
-
-def build(rows: list[dict]) -> tuple[list[dict], int]:
-    """Balance the usable rows into equal pre/post cells per outlet.
-
-    The common cell size is the smallest outlet x period cell. Returns the selected
-    rows and that per-cell size.
-
-    Args:
-        rows (list[dict]): rows to stratify.
-
-    Returns:
-        tuple[list[dict], int]: stratified rows, min number of cells to produce.
-
-    """
-    rng = random.Random(SEED)
-    cells: dict[tuple[str, str], list[dict]] = defaultdict(list)
-    for row in rows:
-        if not row['drop_reason'] and row['period'] in PERIODS:
-            cells[row['outlet'], row['period']].append(row)
-    target = min(len(cells[outlet, period]) for outlet in OUTLETS for period in PERIODS)
-    output: list[dict] = []
-    for outlet in OUTLETS:
-        for period in PERIODS:
-            output.extend(stratified_pick(cells[outlet, period], target, rng))
-    return output, target
 
 
 def main() -> int:
