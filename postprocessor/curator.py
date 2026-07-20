@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import logging
+import random
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -14,8 +15,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
 PARSED = DATA / 'parsed_all.csv'
 
+SEED = 37
 OUTLETS = ('gript', 'irish_examiner', 'rte', 'the_liberal')
 
+
+PERIODS = ('pre', 'post')
 PRE_FINE = ('pre',)
 POST_FINE = ('straddle', 'mid', 'post')
 DROP_OOR = ('out_lo', 'out_hi', '')
@@ -154,6 +158,25 @@ def _write_index(rows: list[dict]) -> None:
         write = csv.writer(indexed)
         write.writerow(cols)
         write.writerows([row[col] for col in cols] for row in rows)
+
+
+def build(rows: list[dict]) -> tuple[list[dict], int]:
+    """Balance the usable rows into equal pre/post cells per outlet.
+
+    The common cell size is the smallest outlet x period cell (the binding
+    constraint). Returns the selected rows and that per-cell size.
+    """
+    rng = random.Random(SEED)
+    cells: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        if not row['drop_reason'] and row['period'] in PERIODS:
+            cells[row['outlet'], row['period']].append(row)
+    target = min(len(cells[outlet, period]) for outlet in OUTLETS for period in PERIODS)
+    out: list[dict] = []
+    for outlet in OUTLETS:
+        for period in PERIODS:
+            return 0
+    return out, target
 
 
 def main() -> int:
