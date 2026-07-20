@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 
 # ---------- DIRECTORIES ----------
 ROOT = Path(__file__).resolve().parent.parent
-DB = Path(os.environ.get('PARSE_DB', ROOT / 'data' / 'dataset.db'))
-OUT_DIR = Path(os.environ.get('PARSE_OUT', ROOT / 'data'))
+DB = ROOT / 'data' / 'dataset.db'
+OUT_DIR = ROOT / 'data'
 OUT_CSV = OUT_DIR / 'parsed_all.csv'
 
 # ---------- RUNNER VARIABLES ----------
@@ -243,6 +243,7 @@ def p_text(segment: str) -> str:
     return _detag(' '.join(ps))
 
 
+# TODO(Rory): Simplify this
 def period_of(date_iso: str) -> str:  # noqa: PLR0911
     """Map an ISO date to a corpus period label.
 

@@ -2,7 +2,8 @@
 
 import logging
 
-from .parser import main
+from .parser import main as parser_main
+from .curator import main as curator_main
 
 # LOGGING
 logger = logging.getLogger(__name__)
@@ -14,4 +15,5 @@ if __name__ == '__main__':
         format='%(asctime)s %(levelname)s %(message)s',
         datefmt='%H:%M:%S',
     )
-    main()
+    parser_main()
+    curator_main()

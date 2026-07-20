@@ -15,9 +15,9 @@ Curation Pipeline (In order of match.):
 8. Drop only genuinely out-of-range rows (pre-2019 strays, future/undated).
 
 Outputs (in data/):
-* parsed_index_v2.csv: every article id with period_fine, binary
+* parsed_index.csv: every article id with period_fine, binary
   period, is_wire and drop_reason (empty = kept) - Advised by AI.
-* corpus_v2.csv: the refined balanced pre/post analysis corpus.
+* corpus.csv: the refined balanced pre/post analysis corpus.
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ PARSED = DATA / 'parsed_all.csv'
 # ---------- SETTINGS ----------
 SEED = 37
 OUTLETS = ('gript', 'irish_examiner', 'rte', 'the_liberal')
+csv.field_size_limit(1 << 24)
 
 # ---------- TIME INTERVALS ----------
 PERIODS = ('pre', 'post')
@@ -255,6 +256,7 @@ def write_corpus(path: Path, rows: list[dict]) -> None:
     Args:
         path (Path): Path to output file.
         rows (list[dict]): Rows to write to file.
+
     """
     rows = sorted(
         rows,
@@ -328,5 +330,4 @@ def main() -> int:
         output,
     )
     logger.info('  post-cell year mix: %s', dict(sorted(yr.items())))
-    return 0
     return 0
