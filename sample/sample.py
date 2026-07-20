@@ -23,13 +23,13 @@ if TYPE_CHECKING:
 DATA_DIR = Path('./data')
 
 # No of articles to sample from each period.
-PRE_GPT_NO = 100
-POST_GPT_NO = 100
+PRE_GPT_NO = 0
+POST_GPT_NO = 2500
 
 # Select years for sampling.
 # (Gript starts 2019).
 PRE_YEARS = range(2019, 2023)  # 2019-2022
-POST_YEARS = range(2025, 2027)
+POST_YEARS = range(2023, 2024)
 
 # RNG seed for a reproducible sample across runs.
 SEED = 37
@@ -430,6 +430,11 @@ def sample(outlet: OutletConfig, data_dir: Path) -> None:
     # Load the inventory and already-sampled URLs.
     inventory = _load_inventory(data_dir / f'{slug}_inventory.csv')
     already_sampled = _load_sampled_log(data_dir / f'{slug}_sampled.log')
+    # The detection stage's calibration URLs must be kept separate from the
+    # corpus.
+    already_sampled |= _load_sampled_log(
+        data_dir / 'calibration' / f'{slug}_calibration.log'
+    )
     logger.info(
         '%s: loaded %d inventory articles, %d already sampled',
         slug,

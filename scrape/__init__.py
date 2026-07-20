@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scraper.scraper import ingest
+from scrape.scrape import ingest
 
 __all__ = ['ingest']
 

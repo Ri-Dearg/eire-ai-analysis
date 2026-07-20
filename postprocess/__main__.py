@@ -1,8 +1,9 @@
-"""Provide a sample of urls to scrape and ingest into the database."""
+"""Module parses and curates collected raw articles."""
 
 import logging
 
-from .scraper import main
+from .curate import main as curator_main
+from .parse import main as parser_main
 
 # LOGGING
 logger = logging.getLogger(__name__)
@@ -14,4 +15,5 @@ if __name__ == '__main__':
         format='%(asctime)s %(levelname)s %(message)s',
         datefmt='%H:%M:%S',
     )
-    main()
+    parser_main()
+    curator_main()
