@@ -321,7 +321,7 @@ def main() -> int:
     yr = Counter(row['year'] for row in picked if row['period'] == 'post')
 
     logger.info(
-        'corpus_v2: %dx%d cells @ %d/cell = %d rows (%d wire-flagged) -> %s',
+        'corpus: %dx%d cells @ %d/cell = %d rows (%d wire-flagged) -> %s',
         len(PERIODS),
         len(OUTLETS),
         target,
