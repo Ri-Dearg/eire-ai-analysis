@@ -210,7 +210,7 @@ def jsonld_nodes(html: str) -> list[dict]:
     """
     nodes: list[dict] = []
     for block in re.findall(
-        r'<script[^>]*application/ld\+json[^>]*>(.*?)</script\s*>', html, flags=DOTALL_I
+        r'<script[^>]*application/ld\+json[^>]*>(.*?)</script[^>]*>', html, flags=DOTALL_I
     ):
         try:
             data = json.loads(block.strip(), strict=False)
@@ -283,8 +283,8 @@ def strip_style_scripts(html: str) -> str:
         str: Html with style and script stripped.
 
     """
-    html = re.sub(r'<script\b[^>]*>.*?</script\s*>', ' ', html, flags=DOTALL_I)
-    return re.sub(r'<style\b[^>]*>.*?</style\s*>', ' ', html, flags=DOTALL_I)
+    html = re.sub(r'<script\b[^>]*>.*?</script[^>]*>', ' ', html, flags=DOTALL_I)
+    return re.sub(r'<style\b[^>]*>.*?</style[^>]*>', ' ', html, flags=DOTALL_I)
 
 
 def unescape(string: object) -> str:
