@@ -221,6 +221,28 @@ def stratified_pick(rows: list[dict], target: int, rng: random.Random) -> list[d
     return picked
 
 
+def write_corpus(path: Path, rows: list[dict]) -> None:
+    """Write selected rows to path.
+
+    Args:
+        path (Path): Path to output file.
+        rows (list[dict]): Rows to write to file.
+    """
+    rows = sorted(
+        rows,
+        key=lambda row: (
+            row['outlet'],
+            row['period'],
+            row['published_date'],
+            int(row['article_id']),
+        ),
+    )
+    with path.open('w', newline='', encoding='utf-8') as fh:
+        write = csv.DictWriter(fh, fieldnames=CORPUS_COLS, extrasaction='ignore')
+        write.writeheader()
+        write.writerows(rows)
+
+
 # Suggested by AI.
 def _write_index(rows: list[dict]) -> None:
     """Write the article drop index.
@@ -260,4 +282,9 @@ def main() -> int:
     print(f'{"outlet":16}{"pre":>8}{"post":>8}')
     for outlet in OUTLETS:
         print(f'{outlet:16}{cell[outlet]["pre"]:>8}{cell[outlet]["post"]:>8}')
+
+    picked, target = build(rows)
+    output = DATA / 'corpus.csv'
+    write_corpus(output, picked)
+
     return 0
