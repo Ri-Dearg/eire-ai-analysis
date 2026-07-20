@@ -2,7 +2,7 @@
 
 import logging
 
-from .sampler import main
+from .sample import main
 
 logger = logging.getLogger(__name__)
 

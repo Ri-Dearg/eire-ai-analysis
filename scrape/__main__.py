@@ -2,7 +2,7 @@
 
 import logging
 
-from .scraper import main
+from .scrape import main
 
 # LOGGING
 logger = logging.getLogger(__name__)

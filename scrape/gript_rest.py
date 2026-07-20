@@ -22,7 +22,7 @@ from urllib.parse import urlencode
 import requests
 from bs4 import BeautifulSoup
 
-from scraper.scraper import (
+from scrape.scrape import (
     DATA_DIR,
     DB_PATH,
     DELAY_RANGE,

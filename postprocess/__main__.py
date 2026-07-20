@@ -2,8 +2,8 @@
 
 import logging
 
-from .parser import main as parser_main
-from .curator import main as curator_main
+from .curate import main as curator_main
+from .parse import main as parser_main
 
 # LOGGING
 logger = logging.getLogger(__name__)
