@@ -1,3 +1,25 @@
+"""Curate the refined balanced analysis corpus from ``data/parsed_all.csv``.
+
+Curation Pipeline (In order of match.):
+
+1. Drop non-200 / no-raw.
+2. Drop thin bodies (body_len_raw < 400) and empty clean bodies.
+3. Drop stubs e.g. 'Listen here:'
+   audio stubs. Valid short briefs (>= 20 words) are kept.
+4. Drop non-prose, bodies with no sentence terminator, or long bodies whose
+   words-per-sentence is implausibly high (election-results tables, photo grids).
+5. Drop Examiner subscriber-exclusive rows.
+6. Drop Gript premium and ON THIS DAY.
+7. Dedup on the raw body sha1, then on a normalised body hash to catch templated text;
+   both keep the earliest by, which also clears cross-period duplicates.
+8. Drop only genuinely out-of-range rows (pre-2019 strays, future/undated).
+
+Outputs (in data/):
+* parsed_index_v2.csv: every article id with period_fine, binary
+  period, is_wire and drop_reason (empty = kept) - Advised by AI.
+* corpus_v2.csv: the refined balanced pre/post analysis corpus.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -15,15 +37,17 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
 PARSED = DATA / 'parsed_all.csv'
 
+# ---------- SETTINGS ----------
 SEED = 37
 OUTLETS = ('gript', 'irish_examiner', 'rte', 'the_liberal')
 
-
+# ---------- TIME INTERVALS ----------
 PERIODS = ('pre', 'post')
 PRE_FINE = ('pre',)
 POST_FINE = ('straddle', 'mid', 'post')
 DROP_OOR = ('out_lo', 'out_hi', '')
 
+# ---------- CORPUS SETTINGS ----------
 CORPUS_COLS = [
     'article_id',
     'url_canonical',
@@ -40,14 +64,16 @@ CORPUS_COLS = [
 ]
 
 MIN_BODY_CHARS = 400
-STUB_MIN_WORDS = 20
 NONPROSE_MIN_WORDS = 120
 NONPROSE_MAX_WPS = 90
+STUB_MIN_WORDS = 20
 
+# ---------- REGEX VARIABLES ----------
 _TERM_RE = re.compile(r'[.!?…]')
 _WS_RE = re.compile(r'\s+')
 
 
+# ---------- ARTICLE DEFINING ----------
 def _is_nonprose(body: str, word_count: int) -> bool:
     """Return True when a body reads as non-prose (a table or unstructured dump).
 
@@ -81,6 +107,7 @@ def _norm_hash(body: str) -> str:
     return hashlib.sha1(norm.encode('utf-8')).hexdigest()  # noqa: S324 Not a security function
 
 
+# ---------- ARTICLE SELECTION ----------
 def drop_reason(row: dict, seen: set[str], seen_norm: set[str]) -> str:  # noqa: PLR0911
     """Return the first applicable drop reason for a row, or '' if it survives.
 
@@ -160,6 +187,7 @@ def label_drops(rows: list[dict]) -> None:
         row['drop_reason'] = drop_reason(row, seen, seen_norm)
 
 
+# ---------- FILE OUTPUT ----------
 def build(rows: list[dict]) -> tuple[list[dict], int]:
     """Balance the usable rows into equal pre/post cells per outlet.
 
@@ -287,4 +315,18 @@ def main() -> int:
     output = DATA / 'corpus.csv'
     write_corpus(output, picked)
 
+    wire = sum(row['is_wire'] == '1' for row in picked)
+    yr = Counter(row['year'] for row in picked if row['period'] == 'post')
+
+    logger.info(
+        'corpus_v2: %dx%d cells @ %d/cell = %d rows (%d wire-flagged) -> %s',
+        len(PERIODS),
+        len(OUTLETS),
+        target,
+        len(picked),
+        wire,
+        output,
+    )
+    logger.info('  post-cell year mix: %s', dict(sorted(yr.items())))
+    return 0
     return 0
