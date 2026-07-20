@@ -145,6 +145,41 @@ def label_drops(rows: list[dict]) -> None:
         row['drop_reason'] = drop_reason(row, seen, seen_norm)
 
 
+def stratified_pick(rows: list[dict], target: int, rng: random.Random) -> list[dict]:
+    """Pick target rows from rows, stratified by year+month.
+
+    Allocates the target across year, month in proportion to their
+    availability.
+
+    Args:
+        rows (list[dict]): rows to stratify.
+        target (int): Target number of rows.
+        rng (random.Random): Randomised seed.
+
+    Returns:
+        list[dict]: Chosen rows to utilise.
+
+    """
+    if len(rows) <= target:
+        return list(rows)
+    strata: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        strata[row['year'], row['month']].append(row)
+    total = len(rows)
+    allocation = {key: int(target * len(value) / total) for key, value in strata.items()}
+    short = target - sum(allocation.values())
+    spare = sorted(strata, key=lambda k: len(strata[k]) - allocation[k], reverse=True)
+    for key in spare[:short]:
+        allocation[key] += 1
+    picked: list[dict] = []
+    for key, value in strata.items():
+        picked.extend(rng.sample(value, min(allocation[key], len(value))))
+    if len(picked) < target:
+        pool = [row for row in rows if row not in picked]
+        picked.extend(rng.sample(pool, min(target - len(picked), len(pool))))
+    return picked
+
+
 # Suggested by AI.
 def _write_index(rows: list[dict]) -> None:
     """Write the article drop index.
@@ -163,8 +198,15 @@ def _write_index(rows: list[dict]) -> None:
 def build(rows: list[dict]) -> tuple[list[dict], int]:
     """Balance the usable rows into equal pre/post cells per outlet.
 
-    The common cell size is the smallest outlet x period cell (the binding
-    constraint). Returns the selected rows and that per-cell size.
+    The common cell size is the smallest outlet x period cell. Returns the selected
+    rows and that per-cell size.
+
+    Args:
+        rows (list[dict]): rows to stratify.
+
+    Returns:
+        tuple[list[dict], int]: stratified rows, min number of cells to produce.
+
     """
     rng = random.Random(SEED)
     cells: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -172,11 +214,11 @@ def build(rows: list[dict]) -> tuple[list[dict], int]:
         if not row['drop_reason'] and row['period'] in PERIODS:
             cells[row['outlet'], row['period']].append(row)
     target = min(len(cells[outlet, period]) for outlet in OUTLETS for period in PERIODS)
-    out: list[dict] = []
+    output: list[dict] = []
     for outlet in OUTLETS:
         for period in PERIODS:
-            return 0
-    return out, target
+            output.extend(stratified_pick(cells[outlet, period], target, rng))
+    return output, target
 
 
 def main() -> int:
