@@ -1,5 +1,9 @@
-from pathlib import Path
 import csv
+import logging
+import sys
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
@@ -92,3 +96,26 @@ def export(output_path: Path) -> dict[str, int]:
             writer.writerow(output)
             written += 1
     return {'rows': written, **counts}
+
+
+def main() -> int:
+    """Regenerate the scored CSV and print per-detector coverage.
+
+    Returns:
+        int: 0 on success, 1 if the corpus file is missing.
+
+    """
+    if not CORPUS.exists():
+        print(f'ERROR: {CORPUS} not found', file=sys.stderr)
+        return 1
+    summary = export(DEFAULT_OUT)
+    rows = summary.pop('rows')
+    logger.info('wrote %d rows -> %s', rows, DEFAULT_OUT)
+
+    for detector, num in summary.items():
+        print(f'  {detector:<14} {num:>7,} scored ({num / rows:.1%})')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
