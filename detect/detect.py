@@ -3,18 +3,20 @@ from __future__ import annotations
 import csv
 from typing import TYPE_CHECKING
 
+import numpy as np
 import torch
-from transformers import AutoModelForSequenceClassification
+from torch.nn import functional
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
-    import numpy as np
 
 RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
+RADAR_AI_INDEX = 0
 
-LM_MAX_TOKENS = int('1024')
+LM_MAX_TOKENS = 1024
 RADAR_MAX_TOKENS = 512
 
 
@@ -41,7 +43,14 @@ class Detector:
         max_tokens: int = LM_MAX_TOKENS,
         device: str | None = None,
     ) -> None:
+        """Define base values for defining detector classes.
 
+        Args:
+            name (str, optional): Name of detector. Defaults to 'base'.
+            max_tokens (int, optional): Max tokens for compute. Defaults to LM_MAX_TOKENS.
+            device (str | None, optional): Device to do computation on. Defaults to None.
+
+        """
         self.name: str = name
         self.max_tokens: int = max_tokens
         self.device = device or select_device()
@@ -85,8 +94,34 @@ class Radar(Detector):
             device=device,
         )
         self.batch_size = batch_size
+        self.tok = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id)
         self.model.to(device).eval()
+
+    @torch.no_grad()
+    def score(self, texts: Sequence[str]) -> np.ndarray:
+        """Score a list of texts; higher = more likely AI.
+
+        Args:
+            texts (Sequence[str]): Article bodies.
+
+        Returns:
+            np.ndarray: One float per text (higher = more AI).
+
+        """
+        output = np.empty(len(texts), dtype=np.float64)
+        for start in range(0, len(texts), self.batch_size):
+            chunk = list(texts[start : start + self.batch_size])
+            enc = self.tok(
+                chunk,
+                return_tensors='pt',
+                truncation=True,
+                padding=True,
+                max_length=self.max_tokens,
+            ).to(self.device)
+            probs = functional.softmax(self.model(**enc).logits.float(), dim=-1)
+            output[start : start + len(chunk)] = probs[:, RADAR_AI_INDEX].cpu().numpy()
+        return output
 
 
 # Resumable design by AI
