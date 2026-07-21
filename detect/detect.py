@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 FASTDETECT_MODEL = 'Qwen/Qwen2.5-3B'
 PERPLEXITY_MODEL = 'Qwen/Qwen2.5-0.5B'
+_EPS = 1e-6
 RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
 RADAR_AI_INDEX = 0
 
@@ -82,7 +83,7 @@ def _pad_batch(
     log-probabilities of the real tokens are unaffected by the pad positions.
 
     Args:
-        tok (object): A Hugging Face tokenizer.
+        tokeniser (object): A Hugging Face tokenizer.
         texts (Sequence[str]): Article bodies.
         max_tokens (int): Truncation window.
         device (str): Torch device string.
@@ -103,6 +104,43 @@ def _pad_batch(
         max_length=max_tokens,
     )
     return encode['input_ids'].to(device), encode['attention_mask'].to(device)
+
+
+def _curvature_stats(
+    shift_logits: torch.Tensor,
+    targets: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Analytic Fast-DetectGPT statistics.
+
+    Args:
+        shift_logits (torch.Tensor): Predicted-position logits.
+        targets (torch.Tensor): Next-token ids.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor]: the observed token log-prob
+        and the mean and variance of the token prob under the model's own distribution.
+
+    """
+    batch_size, length, _vocab = shift_logits.shape
+    device = shift_logits.device
+    observed = torch.empty((batch_size, length), dtype=torch.float32, device=device)
+    expect_mean = torch.empty((batch_size, length), dtype=torch.float32, device=device)
+    variance = torch.empty((batch_size, length), dtype=torch.float32, device=device)
+    for chunk_start in range(0, length, DET_CHUNK):
+        chunk_end = min(chunk_start + DET_CHUNK, length)
+        logp = functional.log_softmax(
+            shift_logits[:, chunk_start:chunk_end, :].float(), dim=-1
+        )
+        prob = logp.exp()
+        mean_curve = (prob * logp).sum(-1)
+        observed[:, chunk_start:chunk_end] = logp.gather(
+            -1, targets[:, chunk_start:chunk_end].unsqueeze(-1)
+        ).squeeze(-1)
+        expect_mean[:, chunk_start:chunk_end] = mean_curve
+        variance[:, chunk_start:chunk_end] = (prob * logp.pow(2)).sum(
+            -1
+        ) - mean_curve.pow(2)
+    return observed, expect_mean, variance
 
 
 def _target_logprobs(shift_logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -222,6 +260,33 @@ class FastDetectGPT(Detector):
             device=device,
         )
         self.tokeniser, self.model = _load_causal(model_id, self.device)
+
+    def score(self, texts: Sequence[str]) -> np.ndarray:
+        """Score a list of texts; higher = more likely AI.
+
+        Args:
+            texts (Sequence[str]): Article bodies.
+
+        Returns:
+            np.ndarray: One float per text (higher = more AI).
+
+        """
+        return _batched_map(texts, DET_BATCH, self._score_batch)
+
+    @torch.no_grad()
+    def _score_batch(self, texts: list[str]) -> np.ndarray:
+        """Score one minibatch; higher = more AI."""
+        ids, attn = _pad_batch(self.tokeniser, texts, self.max_tokens, self.device)
+        if ids.shape[1] < MIN_TOKENS:
+            return np.full(len(texts), np.nan)
+        logits = self.model(ids, attention_mask=attn).logits
+        observed, expect_mean, var = _curvature_stats(logits[:, :-1, :], ids[:, 1:])
+        mask = attn[:, 1:].float()
+        num = ((observed - expect_mean) * mask).sum(1)
+        denom = torch.sqrt((var * mask).sum(1)).clamp_min(_EPS)
+        out = num / denom
+        out[mask.sum(1) < 1.0] = float('nan')
+        return out.cpu().numpy()
 
 
 class Perplexity(Detector):
