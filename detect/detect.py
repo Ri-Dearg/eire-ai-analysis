@@ -49,8 +49,11 @@ def run_detector(
 
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    done = _done_ids(output_path)
     new_file = not output_path.exists()
-    pending = list(zip(ids, texts, strict=True))
+    pending = [
+        (index, text) for index, text in zip(ids, texts, strict=True) if index not in done
+    ]
     with output_path.open('a', newline='', encoding='utf-8') as fh:
         writer = csv.writer(fh)
         if new_file:
