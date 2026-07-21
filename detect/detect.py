@@ -1,3 +1,8 @@
+"""Per-outlet calibration, corpus scoring, and output tables for the detectors.
+
+Turns raw detector scores into a measured lower bound on AI.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -32,7 +37,7 @@ DET_BATCH = 1
 DET_CHUNK = 32
 
 
-# ---------- MODEL SETTINGS ----------
+# ---------- BATCHING ----------
 # AI suggested batching
 def _batched_map(
     texts: Sequence[str], batch_size: int, per_batch: Callable[[list[str]], np.ndarray]
@@ -57,6 +62,25 @@ def _batched_map(
         for position, src in enumerate(indexes):
             output[src] = scores[position]
     return output
+
+
+# Resumable design by AI
+def _done_ids(path: Path) -> set[str]:
+    """Return ids already scored in a checkpoint CSV (empty if absent).
+
+    Args:
+        path (Path): Path to scored article file.
+
+    Returns:
+        set[str]: Set of scored article rows.
+
+    """
+    if not path.exists():
+        return set()
+    with path.open(encoding='utf-8') as file:
+        reader = csv.reader(file)
+        next(reader, None)
+        return {row[0] for row in reader if row}
 
 
 # AI Suggested batch padding
@@ -92,6 +116,7 @@ def _pad_batch(
     return encode['input_ids'].to(device), encode['attention_mask'].to(device)
 
 
+# ---------- CALCULATIONS ----------
 def _cross_perplexity(
     obs_logits: torch.Tensor,
     perf_logits: torch.Tensor,
@@ -209,6 +234,7 @@ def _target_logprobs(shift_logits: torch.Tensor, targets: torch.Tensor) -> torch
     return output
 
 
+# ---------- DEVICE + TOKENS ----------
 def select_device() -> str:
     """Return the best available torch device.
 
@@ -246,6 +272,7 @@ def _load_causal(model_id: str, device: str) -> tuple:
     return tokeniser, model
 
 
+# ---------- DETECTORS ----------
 class Detector:
     """Base detector: subclasses implement per-text scoring (higher = more AI)."""
 
@@ -508,25 +535,6 @@ def build_detector(name: str, **kwargs: object) -> Detector:
 
     """
     return DETECTORS[name](**kwargs)
-
-
-# Resumable design by AI
-def _done_ids(path: Path) -> set[str]:
-    """Return ids already scored in a checkpoint CSV (empty if absent).
-
-    Args:
-        path (Path): Path to scored article file.
-
-    Returns:
-        set[str]: Set of scored article rows.
-
-    """
-    if not path.exists():
-        return set()
-    with path.open(encoding='utf-8') as file:
-        reader = csv.reader(file)
-        next(reader, None)
-        return {row[0] for row in reader if row}
 
 
 def run_detector(
