@@ -1,7 +1,16 @@
+"""Run the detector ensemble over the assembled score inputs (checkpointed).
+
+Reads data/detection/score_inputs.csv and, for each requested detector, writes
+data/detection/<detector>.csv
+"""
+
 import logging
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+from detect.detect import DETECTORS, build_detector, run_detector, select_device
 
 logger = logging.getLogger(__name__)
 
@@ -70,5 +79,18 @@ def main() -> int:
     """
     if not INPUTS.exists():
         build_inputs()
-        return 1
+    names = list(DETECTORS)
+    frame = pd.read_csv(INPUTS, dtype=str).fillna('')
+    ids = frame['id'].tolist()
+    texts = frame['text'].tolist()
+    logger.info('device=%s  inputs=%d  detectors=%s', select_device(), len(ids), names)
+    for name in names:
+        logger.info('[%s] loading weights + scoring ...', name)
+        detector = build_detector(name)
+        out = run_detector(detector, ids, texts, DET_DIR / f'{name}.csv')
+        logger.info('[%s] done -> %s', name, out)
     return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
