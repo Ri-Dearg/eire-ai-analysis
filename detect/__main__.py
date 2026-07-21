@@ -2,7 +2,8 @@
 
 import logging
 
-from .score import main
+from .export import main as export_main
+from .score import main as score_main
 
 # LOGGING
 logger = logging.getLogger(__name__)
@@ -14,4 +15,4 @@ if __name__ == '__main__':
         format='%(asctime)s %(levelname)s %(message)s',
         datefmt='%H:%M:%S',
     )
-    main()
+    raise SystemExit(score_main() or export_main())
