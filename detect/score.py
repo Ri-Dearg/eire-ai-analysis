@@ -38,7 +38,7 @@ def build_inputs() -> Path:
             }
         )
 
-    out = pd.DataFrame(
+    output = pd.DataFrame(
         rows,
         columns=[
             'id',
@@ -51,11 +51,24 @@ def build_inputs() -> Path:
             'text',
         ],
     )
-    out.to_csv(INPUTS, index=False)
+    output.to_csv(INPUTS, index=False)
     logger.info(
         'wrote %d score inputs %d corpus -> %s',
-        len(out),
-        (out.group == 'corpus').sum(),
+        len(output),
+        (output.group == 'corpus').sum(),
         INPUTS,
     )
     return INPUTS
+
+
+def main() -> int:
+    """Score the inputs with the named detectors (default: all).
+
+    Returns:
+        int: 0 on success, 1 on a missing-inputs / unknown-detector error.
+
+    """
+    if not INPUTS.exists():
+        build_inputs()
+        return 1
+    return 0
