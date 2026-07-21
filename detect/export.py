@@ -79,12 +79,10 @@ def export(output_path: Path) -> dict[str, int]:
     written = 0
     with (
         CORPUS.open(encoding='utf-8') as src,
-        output_path.open('w', newline='', encoding='utf-8') as score_directory,
+        output_path.open('w', newline='', encoding='utf-8') as score_file,
     ):
         reader = csv.DictReader(src)
-        writer = csv.DictWriter(
-            score_directory, fieldnames=OUT_COLS, extrasaction='ignore'
-        )
+        writer = csv.DictWriter(score_file, fieldnames=OUT_COLS, extrasaction='ignore')
         writer.writeheader()
         for row in reader:
             output = {col: row.get(col, '') for col in META_COLS}
@@ -118,4 +116,9 @@ def main() -> int:
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
     sys.exit(main())
