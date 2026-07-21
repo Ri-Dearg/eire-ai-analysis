@@ -88,8 +88,8 @@ def main() -> int:
     for name in names:
         logger.info('[%s] loading weights + scoring ...', name)
         detector = build_detector(name)
-        out = run_detector(detector, ids, texts, DET_DIR / f'{name}.csv')
-        logger.info('[%s] done -> %s', name, out)
+        output = run_detector(detector, ids, texts, DET_DIR / f'{name}.csv')
+        logger.info('[%s] done -> %s', name, output)
     return 0
 
 
