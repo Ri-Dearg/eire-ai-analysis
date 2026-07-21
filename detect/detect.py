@@ -4,9 +4,32 @@ import csv
 import os
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
+
+LM_MAX_TOKENS = int('1024')
+
+
+class Detector:
+    """Base detector: subclasses implement per-text scoring (higher = more AI)."""
+
+    name: str = 'base'
+    max_tokens: int = LM_MAX_TOKENS
+
+    def score(self, texts: Sequence[str]) -> np.ndarray:
+        """Score a list of texts; higher = more likely AI.
+
+        Args:
+            texts (Sequence[str]): Article bodies.
+
+        Returns:
+            np.ndarray: One float per text (higher = more AI).
+
+        """
+        raise NotImplementedError
 
 
 # Resumable design by AI
@@ -29,7 +52,7 @@ def _done_ids(path: Path) -> set[str]:
 
 
 def run_detector(
-    detector,
+    detector: Detector,
     ids: Sequence[str],
     texts: Sequence[str],
     output_path: Path,
