@@ -18,7 +18,7 @@ from transformers import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
 # ---------- MODEL SETTINGS ----------

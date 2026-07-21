@@ -1,3 +1,8 @@
+"""Rebuild the shareable scored-corpus CSV from the detector checkpoints.
+
+Ouputs a coprus_scored.csv that is safe to share as an analysis file.
+"""
+
 import csv
 import logging
 import sys
