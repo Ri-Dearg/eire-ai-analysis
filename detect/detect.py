@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
+BINOCULARS_OBSERVER = 'Qwen/Qwen2.5-1.5B'
+BINOCULARS_PERFORMER = 'Qwen/Qwen2.5-1.5B-Instruct'
 FASTDETECT_MODEL = 'Qwen/Qwen2.5-3B'
 PERPLEXITY_MODEL = 'Qwen/Qwen2.5-0.5B'
 _EPS = 1e-6
@@ -104,6 +106,42 @@ def _pad_batch(
         max_length=max_tokens,
     )
     return encode['input_ids'].to(device), encode['attention_mask'].to(device)
+
+
+def _cross_perplexity(
+    obs_logits: torch.Tensor,
+    perf_logits: torch.Tensor,
+    targets: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Binoculars per-position terms.
+
+    Args:
+        obs_logits (torch.Tensor): Observer predicted-position logits.
+        perf_logits (torch.Tensor): Performer predicted-position logits.
+        targets (torch.Tensor): Observed next-token ids.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor]: The observer log-prob of the observed token
+        and the performer/observer cross`.
+
+    """
+    batch_size, length, _vocab = obs_logits.shape
+    device = obs_logits.device
+    obs_target = torch.empty((batch_size, length), dtype=torch.float32, device=device)
+    cross = torch.empty((batch_size, length), dtype=torch.float32, device=device)
+    for chunk_start in range(0, length, DET_CHUNK):
+        chunk_end = min(chunk_start + DET_CHUNK, length)
+        obs_logp = functional.log_softmax(
+            obs_logits[:, chunk_start:chunk_end, :].float(), dim=-1
+        )
+        perf_p = functional.softmax(
+            perf_logits[:, chunk_start:chunk_end, :].float(), dim=-1
+        )
+        obs_target[:, chunk_start:chunk_end] = obs_logp.gather(
+            -1, targets[:, chunk_start:chunk_end].unsqueeze(-1)
+        ).squeeze(-1)
+        cross[:, chunk_start:chunk_end] = (perf_p * obs_logp).sum(-1)
+    return obs_target, cross
 
 
 def _curvature_stats(
@@ -201,7 +239,7 @@ def _load_causal(model_id: str, device: str) -> tuple:
 
     """
     tokeniser = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=_dtype_for(device))
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=_dtype_for(device))
     model.to(device).eval()
     return tokeniser, model
 
@@ -238,6 +276,64 @@ class Detector:
 
         """
         raise NotImplementedError
+
+
+class Binoculars(Detector):
+    """Observer log-perplexity / observer-performer cross-perplexity.
+
+    Returns ``-B`` so higher = more AI (machine text has low Binoculars score).
+    """
+
+    name = 'binoculars'
+
+    def __init__(
+        self,
+        observer_id: str = BINOCULARS_OBSERVER,
+        performer_id: str = BINOCULARS_PERFORMER,
+        device: str | None = None,
+    ) -> None:
+        """Load the observer and performer LMs.
+
+        Args:
+            observer_id (str): Id of the observer LM.
+            performer_id (str): Id of the performer LM.
+            device (str | None): Torch device; auto-selected if None.
+
+        """
+        super().__init__(
+            name=self.name,
+            device=device,
+        )
+        self.tokeniser, self.observer = _load_causal(observer_id, self.device)
+        _, self.performer = _load_causal(performer_id, self.device)
+
+    def score(self, texts: Sequence[str]) -> np.ndarray:
+        """Score a list of texts; higher = more likely AI.
+
+        Args:
+            texts (Sequence[str]): Article bodies.
+
+        Returns:
+            np.ndarray: One float per text (higher = more AI).
+
+        """
+        return _batched_map(texts, DET_BATCH, self._score_batch)
+
+    @torch.no_grad()
+    def _score_batch(self, texts: list[str]) -> np.ndarray:
+        """Score one minibatch; returns ``-B`` so higher = more AI."""
+        ids, attn = _pad_batch(self.tokeniser, texts, self.max_tokens, self.device)
+        if ids.shape[1] < MIN_TOKENS:
+            return np.full(len(texts), np.nan)
+        obs_logits = self.observer(ids, attention_mask=attn).logits
+        perf_logits = self.performer(ids, attention_mask=attn).logits
+        obs_target, cross = _cross_perplexity(
+            obs_logits[:, :-1, :], perf_logits[:, :-1, :], ids[:, 1:]
+        )
+        mask = attn[:, 1:].float()
+        log_perplex = -_masked_mean(obs_target, mask)
+        x_perplex = -_masked_mean(cross, mask)
+        return (-(log_perplex / x_perplex.clamp_min(_EPS))).cpu().numpy()
 
 
 class FastDetectGPT(Detector):
