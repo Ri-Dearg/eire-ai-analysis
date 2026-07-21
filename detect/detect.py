@@ -20,6 +20,7 @@ PERPLEXITY_MODEL = 'Qwen/Qwen2.5-0.5B'
 RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
 RADAR_AI_INDEX = 0
 
+MIN_TOKENS = 2
 LM_MAX_TOKENS = 1024
 RADAR_MAX_TOKENS = 512
 DET_BATCH = 1
@@ -52,6 +53,24 @@ def _batched_map(
     return output
 
 
+def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Mean of values over real positions, NaN where a row has none.
+
+    Args:
+        values (torch.Tensor): Per-position values, shape (batch, length).
+        mask (torch.Tensor): 1.0 for real positions, 0.0 for padding, same shape.
+
+    Returns:
+        torch.Tensor: Per-row mean, shape, NaN for empty rows.
+
+    """
+    counts = mask.sum(1)
+    total = (values * mask).sum(1)
+    out = total / counts.clamp_min(1.0)
+    out[counts < 1.0] = float('nan')
+    return out
+
+
 # AI Suggested batch padding
 def _pad_batch(
     tokeniser: object, texts: Sequence[str], max_tokens: int, device: str
@@ -75,14 +94,40 @@ def _pad_batch(
     tokeniser.padding_side = 'right'
     if tokeniser.pad_token_id is None:
         tokeniser.pad_token = tokeniser.eos_token
-    enc = tokeniser(
+    encode = tokeniser(
         list(texts),
         return_tensors='pt',
         padding=True,
         truncation=True,
         max_length=max_tokens,
     )
-    return enc['input_ids'].to(device), enc['attention_mask'].to(device)
+    return encode['input_ids'].to(device), encode['attention_mask'].to(device)
+
+
+def _target_logprobs(shift_logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Log P(target) per position,.
+
+    Args:
+        shift_logits (torch.Tensor): Logits for predicted positions.
+        targets (torch.Tensor): Observed next-token ids.
+
+    Returns:
+        torch.Tensor: Per-position target log-probabilities.
+
+    """
+    batch_size, length, _vocab = shift_logits.shape
+    output = torch.empty(
+        (batch_size, length), dtype=torch.float32, device=shift_logits.device
+    )
+    for chunk_start in range(0, length, DET_CHUNK):
+        chunk_end = min(chunk_start + DET_CHUNK, length)
+        chunk = shift_logits[:, chunk_start:chunk_end, :].float()
+        lse = torch.logsumexp(chunk, dim=-1)
+        gathered = chunk.gather(
+            -1, targets[:, chunk_start:chunk_end].unsqueeze(-1)
+        ).squeeze(-1)
+        output[:, chunk_start:chunk_end] = gathered - lse
+    return output
 
 
 def select_device() -> str:
@@ -188,7 +233,17 @@ class Perplexity(Detector):
             np.ndarray: One float per text (higher = more AI).
 
         """
-        return _batched_map(texts, DET_BATCH, [0])
+        return _batched_map(texts, DET_BATCH, self._score_batch)
+
+    @torch.no_grad()
+    def _score_batch(self, texts: list[str]) -> np.ndarray:
+        """Score one minibatch; higher = more AI."""
+        ids, attn = _pad_batch(self.tokeniser, texts, self.max_tokens, self.device)
+        if ids.shape[1] < MIN_TOKENS:
+            return np.full(len(texts), np.nan)
+        logits = self.model(ids, attention_mask=attn).logits
+        log_probs = _target_logprobs(logits[:, :-1, :], ids[:, 1:])
+        return _masked_mean(log_probs, attn[:, 1:].float()).cpu().numpy()
 
 
 class Radar(Detector):
