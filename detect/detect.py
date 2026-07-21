@@ -1,23 +1,50 @@
 from __future__ import annotations
 
 import csv
-import os
 from typing import TYPE_CHECKING
 
-import numpy as np
+import torch
+from transformers import AutoModelForSequenceClassification
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
+    import numpy as np
+
+RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
+
 LM_MAX_TOKENS = int('1024')
+RADAR_MAX_TOKENS = 512
+
+
+def select_device() -> str:
+    """Return the best available torch device.
+
+    Returns:
+        str: Best available calculation device.
+
+    """
+    if torch.backends.mps.is_available():
+        return 'mps'
+    if torch.cuda.is_available():
+        return 'cuda'
+    return 'cpu'
 
 
 class Detector:
     """Base detector: subclasses implement per-text scoring (higher = more AI)."""
 
-    name: str = 'base'
-    max_tokens: int = LM_MAX_TOKENS
+    def __init__(
+        self,
+        name: str = 'base',
+        max_tokens: int = LM_MAX_TOKENS,
+        device: str | None = None,
+    ) -> None:
+
+        self.name: str = name
+        self.max_tokens: int = max_tokens
+        self.device = device or select_device()
 
     def score(self, texts: Sequence[str]) -> np.ndarray:
         """Score a list of texts; higher = more likely AI.
@@ -30,6 +57,36 @@ class Detector:
 
         """
         raise NotImplementedError
+
+
+class Radar(Detector):
+    """Supervised RoBERTa detector (RADAR); returns P(text is AI-generated)."""
+
+    name = 'radar'
+    max_tokens = RADAR_MAX_TOKENS
+
+    def __init__(
+        self,
+        model_id: str = RADAR_MODEL,
+        device: str | None = None,
+        batch_size: int = 16,
+    ) -> None:
+        """Load the RADAR sequence-classification detector.
+
+        Args:
+            model_id (str): Id of the RADAR detector.
+            device (str | None): Torch device; auto-selected if None.
+            batch_size (int): Sequences per forward pass.
+
+        """
+        super().__init__(
+            name=self.name,
+            max_tokens=self.max_tokens,
+            device=device,
+        )
+        self.batch_size = batch_size
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_id)
+        self.model.to(device).eval()
 
 
 # Resumable design by AI
