@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
+# ---------- MODEL SETTINGS ----------
 BINOCULARS_OBSERVER = 'Qwen/Qwen2.5-1.5B'
 BINOCULARS_PERFORMER = 'Qwen/Qwen2.5-1.5B-Instruct'
 FASTDETECT_MODEL = 'Qwen/Qwen2.5-3B'
@@ -23,14 +24,15 @@ PERPLEXITY_MODEL = 'Qwen/Qwen2.5-0.5B'
 _EPS = 1e-6
 RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
 RADAR_AI_INDEX = 0
+RADAR_MAX_TOKENS = 512
 
 MIN_TOKENS = 2
 LM_MAX_TOKENS = 1024
-RADAR_MAX_TOKENS = 512
 DET_BATCH = 1
 DET_CHUNK = 32
 
 
+# ---------- MODEL SETTINGS ----------
 # AI suggested batching
 def _batched_map(
     texts: Sequence[str], batch_size: int, per_batch: Callable[[list[str]], np.ndarray]
@@ -55,24 +57,6 @@ def _batched_map(
         for position, src in enumerate(indexes):
             output[src] = scores[position]
     return output
-
-
-def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    """Mean of values over real positions, NaN where a row has none.
-
-    Args:
-        values (torch.Tensor): Per-position values, shape (batch, length).
-        mask (torch.Tensor): 1.0 for real positions, 0.0 for padding, same shape.
-
-    Returns:
-        torch.Tensor: Per-row mean, shape, NaN for empty rows.
-
-    """
-    counts = mask.sum(1)
-    total = (values * mask).sum(1)
-    out = total / counts.clamp_min(1.0)
-    out[counts < 1.0] = float('nan')
-    return out
 
 
 # AI Suggested batch padding
@@ -179,6 +163,24 @@ def _curvature_stats(
             -1
         ) - mean_curve.pow(2)
     return observed, expect_mean, variance
+
+
+def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Mean of values over real positions, NaN where a row has none.
+
+    Args:
+        values (torch.Tensor): Per-position values, shape (batch, length).
+        mask (torch.Tensor): 1.0 for real positions, 0.0 for padding, same shape.
+
+    Returns:
+        torch.Tensor: Per-row mean, shape, NaN for empty rows.
+
+    """
+    counts = mask.sum(1)
+    total = (values * mask).sum(1)
+    out = total / counts.clamp_min(1.0)
+    out[counts < 1.0] = float('nan')
+    return out
 
 
 def _target_logprobs(shift_logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
@@ -458,7 +460,7 @@ class Radar(Detector):
         self.batch_size = batch_size
         self.tokeniser = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id)
-        self.model.to(device).eval()
+        self.model.to(self.device).eval()
 
     @torch.no_grad()
     def score(self, texts: Sequence[str]) -> np.ndarray:
@@ -484,6 +486,28 @@ class Radar(Detector):
             probs = functional.softmax(self.model(**enc).logits.float(), dim=-1)
             output[start : start + len(chunk)] = probs[:, RADAR_AI_INDEX].cpu().numpy()
         return output
+
+
+DETECTORS = {
+    'perplexity': Perplexity,
+    'fastdetectgpt': FastDetectGPT,
+    'binoculars': Binoculars,
+    'radar': Radar,
+}
+
+
+def build_detector(name: str, **kwargs: object) -> Detector:
+    """Instantiate a detector by name.
+
+    Args:
+        name (str): One of :data:`DETECTORS`.
+        **kwargs (object): Passed to the detector constructor.
+
+    Returns:
+        Detector: The constructed detector.
+
+    """
+    return DETECTORS[name](**kwargs)
 
 
 # Resumable design by AI
@@ -531,8 +555,8 @@ def run_detector(
     pending = [
         (index, text) for index, text in zip(ids, texts, strict=True) if index not in done
     ]
-    with output_path.open('a', newline='', encoding='utf-8') as fh:
-        writer = csv.writer(fh)
+    with output_path.open('a', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
         if new_file:
             writer.writerow(['id', f'{detector.name}_score'])
         for start in range(0, len(pending), batch):
@@ -544,5 +568,5 @@ def run_detector(
                     for (cid, _), score in zip(chunk, scores, strict=True)
                 ]
             )
-            fh.flush()
+            file.flush()
     return output_path
