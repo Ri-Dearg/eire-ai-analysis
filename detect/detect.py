@@ -9,6 +9,25 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+# Resumable design by AI
+def _done_ids(path: Path) -> set[str]:
+    """Return ids already scored in a checkpoint CSV (empty if absent).
+
+    Args:
+        path (Path): Path to scored article file.
+
+    Returns:
+        set[str]: Set of scored article rows.
+
+    """
+    if not path.exists():
+        return set()
+    with path.open(encoding='utf-8') as file:
+        reader = csv.reader(file)
+        next(reader, None)
+        return {row[0] for row in reader if row}
+
+
 def run_detector(
     detector,
     ids: Sequence[str],
