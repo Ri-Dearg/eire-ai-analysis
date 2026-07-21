@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
-
+PERPLEXITY_MODEL = 'Qwen/Qwen2.5-0.5B'
 RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
 RADAR_AI_INDEX = 0
 
@@ -66,6 +66,27 @@ class Detector:
 
         """
         raise NotImplementedError
+
+
+class Perplexity(Detector):
+    """Mean token log-probability under a small LM (higher = more AI)."""
+
+    name = 'perplexity'
+
+    def __init__(
+        self, model_id: str = PERPLEXITY_MODEL, device: str | None = None
+    ) -> None:
+        """Load the reference LM.
+
+        Args:
+            model_id (str): HF model id for the reference LM.
+            device (str | None): Torch device; auto-selected if None.
+
+        """
+        super().__init__(
+            name=self.name,
+            device=device,
+        )
 
 
 class Radar(Detector):
@@ -184,3 +205,6 @@ def run_detector(
             )
             fh.flush()
     return output_path
+
+
+print(Perplexity().device)
