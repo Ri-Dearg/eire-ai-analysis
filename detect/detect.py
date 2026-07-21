@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import torch
 from torch.nn import functional
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
@@ -32,6 +36,29 @@ def select_device() -> str:
     if torch.cuda.is_available():
         return 'cuda'
     return 'cpu'
+
+
+# AI suggestion for Mac
+def _dtype_for(device: str) -> torch.dtype:
+    """Return bf16 on accelerators, fp32 on CPU."""
+    return torch.bfloat16 if device in ('mps', 'cuda') else torch.float32
+
+
+def _load_causal(model_id: str, device: str) -> tuple:
+    """Load a causal LM + tokenizer in eval mode on device.
+
+    Args:
+        model_id (str): Model id.
+        device (str): Target torch device.
+
+    Returns:
+        tuple: (tokenizer, model).
+
+    """
+    tok = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=_dtype_for(device))
+    model.to(device).eval()
+    return tok, model
 
 
 class Detector:
@@ -87,6 +114,8 @@ class Perplexity(Detector):
             name=self.name,
             device=device,
         )
+
+        self.tok, self.model = _load_causal(model_id, self.device)
 
 
 class Radar(Detector):
@@ -205,6 +234,3 @@ def run_detector(
             )
             fh.flush()
     return output_path
-
-
-print(Perplexity().device)
