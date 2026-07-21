@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
     from pathlib import Path
 
+FASTDETECT_MODEL = 'Qwen/Qwen2.5-3B'
 PERPLEXITY_MODEL = 'Qwen/Qwen2.5-0.5B'
 RADAR_MODEL = 'TrustSafeAI/RADAR-Vicuna-7B'
 RADAR_AI_INDEX = 0
@@ -201,8 +202,30 @@ class Detector:
         raise NotImplementedError
 
 
+class FastDetectGPT(Detector):
+    """Sampling-free conditional-probability curvature."""
+
+    name = 'fastdetectgpt'
+
+    def __init__(
+        self, model_id: str = FASTDETECT_MODEL, device: str | None = None
+    ) -> None:
+        """Load the scoring LM.
+
+        Args:
+            model_id (str): HF model id for the scoring LM.
+            device (str | None): Torch device; auto-selected if None.
+
+        """
+        super().__init__(
+            name=self.name,
+            device=device,
+        )
+        self.tokeniser, self.model = _load_causal(model_id, self.device)
+
+
 class Perplexity(Detector):
-    """Mean token log-probability under a small LM (higher = more AI)."""
+    """Mean token log-probability under a small LM."""
 
     name = 'perplexity'
 
