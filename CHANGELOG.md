@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.11.0] - 2026-07-21
+### :sparkles: New Features
+- [`716a2c7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/716a2c723972ad6d734b9b90272482a1246ffcb2) - **detect**: ✨ create detect module *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`67a66b7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/67a66b75f0cfbfd341d339bbf7b21bc204ce14ae) - **detect**: 🚧 add detect run *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`8a6c058`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/8a6c058c29b30cd1749ee5b81d1a8ce5619cbb8c) - **detect**: 🚧 add check for completed articles *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`b99a986`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/b99a9868726fbb9eddfd7eb344c16d5fb609b74c) - **detect**: ✨ add detector class *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`ff387a0`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ff387a09465641533b82ae464bc86280fb068931) - **detect**: 🚧 create radar class *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`af5ef0e`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/af5ef0eb58c17edf282e48c37daf78e625427e84) - **detect**: ✨ add scoring for Radar *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`dedcb14`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/dedcb14c843c663f4bcb3c5e35fe8dab39230a1b) - **detect**: 🚧 create perplexity class *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`79929de`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/79929de7bd67fe390fc80a5718bfb9127e57f224) - **detect**: 🚧 add compute setting for mac *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`5bd5ca8`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/5bd5ca8612a28cf23218f3c0b2d9c99bbeb16428) - **detect**: 🚧 add batch and token padding *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`af18a66`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/af18a6675a9cc0c09630bf0cb3f2c580be9a5744) - **detect**: ✨ add perplexity class *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`4fe7ba2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/4fe7ba2cca4f49b4ac15cdf3070ba29245fb2880) - **detect**: 🚧 add fastdetectgpt class *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a32e1c6`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a32e1c63215a24778ed6319e8491d8717829a13c) - **detect**: ✨ add fstdetectgpt class complete *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`76a6909`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/76a690973f5f87cd6dd1483d01764bef03421b29) - **detect**: ✨ add Binoculars class *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`f4e1b38`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/f4e1b38e01e91eabfaa9e6811baa70159c171499) - **detect**: ✨ add build detectors *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`b089bb5`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/b089bb5d88aad438546c0df6e8826c4e3d0a7f17) - **score**: 🚧 add build input file *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`8d9931c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/8d9931c4c1aec870e90de8d65a08ed488a4a1dcb) - **score**: 🚧 add main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`86635f8`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/86635f8756200bde246dfd676c645615ed9f48c3) - **score**: ✨ add main to cycle detectors *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`65e3fda`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/65e3fdad826536db47d28a3e6be64d3ec7fce6a6) - **score**: ✨ add main, logging *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`2b79083`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/2b790833fb7795ca19858d9bb95498490d3904eb) - **export**: ✨ add score compile *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`9e136e5`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9e136e5e9e8ef9c20b6f4407f1bfd1f82c1bdc1d) - **export**: ✨ add scored csv export *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`fb2b8ee`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/fb2b8ee2533bb7b7ab9ce8be9578a8876d50b42d) - **export**: ✨ add main to export *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`60cc6f3`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/60cc6f30f4310aa69d2a0f99c867f8744f06f3ec) - **detect**: ✨ update main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :bug: Bug Fixes
+- [`1f65433`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/1f65433feb6c2891dfdbb5cb7971eab1b8c0ba7e) - **export**: 🐛 fix logging, ouput variable name *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`d5f7deb`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/d5f7deb3e89cc49e5d8f0424c921ec33e3eced1e) - **score**: 🐛 fix logging *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.11.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.10.0...v0.11.0
+
 ## [v0.10.0] - 2026-07-20
 ### :sparkles: New Features
 - [`8baffc4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/8baffc4ea386b4f0da4a781d84d1b7a8320936a5) - **parse**: 🚧 add db connectinon, multiprocess *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
