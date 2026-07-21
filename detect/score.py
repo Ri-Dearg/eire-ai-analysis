@@ -1,6 +1,6 @@
 """Run the detector ensemble over the assembled score inputs (checkpointed).
 
-Reads data/detection/score_inputs.csv and, for each requested detector, writes
+Reads data/detection/score_inputs.csv and, for each detector, writes
 data/detection/<detector>.csv
 """
 
@@ -14,14 +14,15 @@ from detect.detect import DETECTORS, build_detector, run_detector, select_device
 
 logger = logging.getLogger(__name__)
 
+# ---------- DIRECTORIES ----------
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
-CALIB_DIR = DATA / 'calibration'
 DET_DIR = DATA / 'detection'
 INPUTS = DET_DIR / 'score_inputs.csv'
 CORPUS = DATA / 'corpus.csv'
 
 
+# ---------- BUILD TRAINING SET ----------
 def build_inputs() -> Path:
     """Assemble the id -> text table to score.
 
@@ -74,7 +75,7 @@ def main() -> int:
     """Score the inputs with the named detectors (default: all).
 
     Returns:
-        int: 0 on success, 1 on a missing-inputs / unknown-detector error.
+        int: 0 on success.
 
     """
     if not INPUTS.exists():
