@@ -22,6 +22,67 @@ RADAR_AI_INDEX = 0
 
 LM_MAX_TOKENS = 1024
 RADAR_MAX_TOKENS = 512
+DET_BATCH = 1
+DET_CHUNK = 32
+
+
+# AI suggested batching
+def _batched_map(
+    texts: Sequence[str], batch_size: int, per_batch: Callable[[list[str]], np.ndarray]
+) -> np.ndarray:
+    """Score texts in length-sorted minibatches, restoring input order.
+
+    Args:
+        texts (Sequence[str]): All documents to score.
+        batch_size (int): Documents per pass.
+        per_batch (Callable[[list[str]], np.ndarray]): Scores one minibatch,
+            returning one float per document.
+
+    Returns:
+        np.ndarray: One float per input document, aligned to ``texts``.
+
+    """
+    order = sorted(range(len(texts)), key=lambda index: len(texts[index]))
+    output = np.empty(len(texts), dtype=np.float64)
+    for start in range(0, len(order), batch_size):
+        indexes = order[start : start + batch_size]
+        scores = per_batch([texts[index] for index in indexes])
+        for position, src in enumerate(indexes):
+            output[src] = scores[position]
+    return output
+
+
+# AI Suggested batch padding
+def _pad_batch(
+    tokeniser: object, texts: Sequence[str], max_tokens: int, device: str
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Tokenize texts into a right-padded, truncated batch on device.
+
+    Right padding keeps every real token's causal context intact, so the per-token
+    log-probabilities of the real tokens are unaffected by the pad positions.
+
+    Args:
+        tok (object): A Hugging Face tokenizer.
+        texts (Sequence[str]): Article bodies.
+        max_tokens (int): Truncation window.
+        device (str): Torch device string.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor]: (input_ids, attention_mask), each
+        shape (batch, seq).
+
+    """
+    tokeniser.padding_side = 'right'
+    if tokeniser.pad_token_id is None:
+        tokeniser.pad_token = tokeniser.eos_token
+    enc = tokeniser(
+        list(texts),
+        return_tensors='pt',
+        padding=True,
+        truncation=True,
+        max_length=max_tokens,
+    )
+    return enc['input_ids'].to(device), enc['attention_mask'].to(device)
 
 
 def select_device() -> str:
@@ -55,10 +116,10 @@ def _load_causal(model_id: str, device: str) -> tuple:
         tuple: (tokenizer, model).
 
     """
-    tok = AutoTokenizer.from_pretrained(model_id)
+    tokeniser = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=_dtype_for(device))
     model.to(device).eval()
-    return tok, model
+    return tokeniser, model
 
 
 class Detector:
@@ -106,7 +167,7 @@ class Perplexity(Detector):
         """Load the reference LM.
 
         Args:
-            model_id (str): HF model id for the reference LM.
+            model_id (str): Model id for the reference LM.
             device (str | None): Torch device; auto-selected if None.
 
         """
@@ -115,7 +176,19 @@ class Perplexity(Detector):
             device=device,
         )
 
-        self.tok, self.model = _load_causal(model_id, self.device)
+        self.tokeniser, self.model = _load_causal(model_id, self.device)
+
+    def score(self, texts: Sequence[str]) -> np.ndarray:
+        """Score a list of texts; higher = more likely AI.
+
+        Args:
+            texts (Sequence[str]): Article bodies.
+
+        Returns:
+            np.ndarray: One float per text (higher = more AI).
+
+        """
+        return _batched_map(texts, DET_BATCH, [0])
 
 
 class Radar(Detector):
@@ -144,7 +217,7 @@ class Radar(Detector):
             device=device,
         )
         self.batch_size = batch_size
-        self.tok = AutoTokenizer.from_pretrained(model_id)
+        self.tokeniser = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id)
         self.model.to(device).eval()
 
@@ -162,7 +235,7 @@ class Radar(Detector):
         output = np.empty(len(texts), dtype=np.float64)
         for start in range(0, len(texts), self.batch_size):
             chunk = list(texts[start : start + self.batch_size])
-            enc = self.tok(
+            enc = self.tokeniser(
                 chunk,
                 return_tensors='pt',
                 truncation=True,
