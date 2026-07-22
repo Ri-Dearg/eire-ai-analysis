@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -9,7 +10,12 @@ ROOT = Path(__file__).resolve().parent.parent
 SCORED = ROOT / 'data' / 'corpus_scored.csv'
 
 OUTLETS = ['rte', 'irish_examiner', 'the_liberal', 'gript']
-
+PALETTE = {
+    'rte': '#449fab',
+    'irish_examiner': '#f05a22',
+    'the_liberal': '#1d72bd',
+    'gript': '#df4949',
+}
 BANNER = (
     'Detector scores are a **lower bound**, not a count. '
     'Pre-ChatGPT articles are a false-positive control. '
@@ -26,12 +32,74 @@ DETECTORS = {
 
 @st.cache_data
 def load() -> pd.DataFrame:
-    """Load the freshest scored corpus CSV (metadata + scores, no bodies)."""
+    """Load the freshest scored corpus CSV (metadata + scores, no bodies).
+
+    Returns:
+        pd.DataFrame: DataFrame to Display.
+
+    """
     src = SCORED
     df = pd.read_csv(src)
     df['word_count'] = pd.to_numeric(df['word_count'], errors='coerce')
     df['is_wire'] = pd.to_numeric(df['is_wire'], errors='coerce').fillna(0)
     return df
+
+
+# AI Designed
+def _grouped_box(df: pd.DataFrame, col: str, title: str, ylabel: str) -> plt.Figure:
+    """Box plot of col by outlet x period.
+
+    Args:
+        df (pd.DataFrame): DataFrame to display
+        col (str): Column to show
+        title (str): Title for Plot
+        ylabel (str): Label for Y
+
+    Returns:
+        plt.Figure: Plot to display.
+
+    """
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    positions, data, colours, ticks = [], [], [], []
+    pos = 0
+    present = [outlet for outlet in OUTLETS if outlet in set(df['outlet'])]
+    for outlet in present:
+        for period in ('pre', 'post'):
+            sub = df[(df['outlet'] == outlet) & (df['period'] == period)]
+            data.append(sub[col].dropna())
+            positions.append(pos)
+            colours.append(PALETTE[outlet] if period == 'post' else '#cccccc')
+            ticks.append((pos, period.upper()))
+            pos += 1
+        ax.text(
+            pos - 1.5,
+            -0.22,
+            outlet,
+            ha='center',
+            fontsize=11,
+            transform=ax.get_xaxis_transform(),
+        )
+        pos += 0.6
+    if not data:
+        return fig
+    bp = ax.boxplot(
+        data,
+        positions=positions,
+        patch_artist=True,
+        showfliers=False,
+        widths=0.7,
+        medianprops={'color': 'black', 'linewidth': 1.6},
+    )
+    for patch, colour in zip(bp['boxes'], colours, strict=True):
+        patch.set_facecolor(colour)
+        patch.set_alpha(0.85)
+    ax.set_xticks([t for t, _ in ticks])
+    ax.set_xticklabels([lab for _, lab in ticks], fontsize=9)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.spines[['top', 'right']].set_visible(False)
+    fig.tight_layout()
+    return fig
 
 
 def apply_filters(
@@ -101,6 +169,33 @@ def tab_comparison(df: pd.DataFrame) -> None:
     )
 
 
+def tab_overview(df: pd.DataFrame) -> None:
+    """Corpus composition and the length picture.
+
+    Args:
+        df (pd.DataFrame): DataFrame to display
+
+    """
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric('Articles (filtered)', f'{len(df):,}')
+    col2.metric('Outlets', df['outlet'].nunique())
+    col3.metric('Median words', f'{df["word_count"].median():,.0f}' if len(df) else '—')
+    col4.metric('Wire share', f'{df["is_wire"].mean():.1%}' if len(df) else '—')
+    comp = (
+        df.groupby(['outlet', 'period'])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(OUTLETS)
+        .dropna(how='all')
+    )
+    st.subheader('Composition (articles per outlet × period)')
+    st.bar_chart(comp)
+    st.subheader('Article length by outlet × period')
+    st.pyplot(
+        _grouped_box(df, 'word_count', '', 'words per article'), use_container_width=True
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title='Irish News AI-likelihood', layout='wide')
     st.title('AI-generated content in Irish news — explorer')
@@ -109,6 +204,7 @@ def main() -> None:
         'period · pre/post ChatGPT (30 Nov 2022)'
     )
     df = sidebar(load())
+    tab_overview(df)
     tab_comparison(df)
 
 
