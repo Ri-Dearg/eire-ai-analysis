@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.13.0] - 2026-07-22
+### :sparkles: New Features
+- [`e925474`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/e9254748b60f9b5bc8235cab5d6b2324778abd71) - **board**: 🚧 create streamlit dashboard *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`d5336fb`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/d5336fb846031fd15f3595ee825da3d4292bba68) - **board**: 🚧 add filter sidebar *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`fdfd8d4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/fdfd8d404671046de4d97a85141548cdd98d04c0) - **board**: ✨ add filter sidebar *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`ac657ca`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ac657ca432cf3f94767a402256232cf65a9a23b9) - **board**: 🚧 cache data *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`9396a5a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9396a5a467624e9185e38042ed37eb50f8b17210) - **board**: ✨ add comparison table *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`bd6eb2b`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bd6eb2b4023b3889e996775a03147d74ab5c0411) - **board**: ✨ display comparison overview *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3afbdb4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/3afbdb473db663c424d43a54097c00db502366d1) - **board**: ✨ add detector plot *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`afa2191`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/afa21912f5d1b742fd1954bd732b0435c1b4d587) - **board**: ✨ add articles table *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :recycle: Refactors
+- [`9430bf3`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9430bf3cc38d9e8a8a78f4fa1bc842ca6e3b9371) - **board**: ♻️ update unstack to pivot table *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.13.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.12.0...v0.13.0
+
 ## [v0.12.0] - 2026-07-22
 ### :sparkles: New Features
 - [`c56ac4d`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c56ac4d69b0eec6ccd03239dbc38ce5b8cd4482b) - **pres**: ✨ load dataframe *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
