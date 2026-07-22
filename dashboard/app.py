@@ -161,12 +161,34 @@ def tab_comparison(df: pd.DataFrame) -> None:
         'Legacy vs Counter-consensus. **Pending full ensemble scoring and calibration**'
     )
     med = df.groupby(['category', 'period'])[list(DETECTORS)].median().round(4)
-    st.dataframe(med, use_container_width=True)
+    st.dataframe(med, width='stretch')
     st.caption(
         'Medians of raw detector scores under the current filters. '
         'Raw scores are not comparable across detectors and are not '
         'calibrated probabilities.'
     )
+
+
+def tab_detectors(df: pd.DataFrame) -> None:
+    """Score distributions for one detector.
+
+    Args:
+        df (pd.DataFrame): DataFrame to display.
+
+    """
+    col = st.selectbox('Detector', options=list(DETECTORS), format_func=DETECTORS.get)
+    scored = df[df[col].notna()]
+    st.caption(
+        f'{len(scored):,} of {len(df):,} filtered articles carry a '
+        f'{DETECTORS[col]} score.'
+    )
+    st.pyplot(_grouped_box(scored, col, DETECTORS[col], 'score'), width='stretch')
+    if col == 'radar_score':
+        st.info(
+            'Raise the **minimum word count** slider (sidebar) to ~300 and '
+            'watch The Liberal PRE box collapse: the spike is a short-text '
+            'false positive, not pre-2022 AI.'
+        )
 
 
 def tab_overview(df: pd.DataFrame) -> None:
@@ -191,9 +213,7 @@ def tab_overview(df: pd.DataFrame) -> None:
     st.subheader('Composition (articles per outlet × period)')
     st.bar_chart(comp)
     st.subheader('Article length by outlet × period')
-    st.pyplot(
-        _grouped_box(df, 'word_count', '', 'words per article'), use_container_width=True
-    )
+    st.pyplot(_grouped_box(df, 'word_count', '', 'words per article'), width='stretch')
 
 
 def main() -> None:
@@ -205,6 +225,7 @@ def main() -> None:
     )
     df = sidebar(load())
     tab_overview(df)
+    tab_detectors(df)
     tab_comparison(df)
 
 
