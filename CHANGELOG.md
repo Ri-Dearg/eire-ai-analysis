@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.12.0] - 2026-07-22
+### :sparkles: New Features
+- [`c56ac4d`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c56ac4d69b0eec6ccd03239dbc38ce5b8cd4482b) - **pres**: ✨ load dataframe *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`778531a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/778531a4f5ccbacd67b1b0dd01cb56b92dd1eb8f) - **pres**: ✨ add corpus balance chart *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`c43dbbe`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c43dbbed1ea9f7baa39b7b1529ac2b002313cf3d) - **pres**: ✨ add word length plot *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`ed9a801`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ed9a801e1bf75e62586c54794e14ee845f3bf207) - **pres**: ✨ add wire analysis *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`aada2d5`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/aada2d531a086689ad5c6835b10c3bac867e3954) - **pres**: ✨ add scoring plots *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`0aa1e57`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/0aa1e5745b5964b0fc41d5c4bcc94aad14f64b37) - **pres**: ✨ add detection comparison *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`35b880c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/35b880c3552dfcabb37dcf0c5472b093e89a530c) - **pres**: ✨ add RADAR examination *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`1fde312`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/1fde31238f33fcab3cac9231f21b14c90d79015b) - **pres**: ✨ add summary *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.12.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.11.0...v0.12.0
+
 ## [v0.11.0] - 2026-07-21
 ### :sparkles: New Features
 - [`716a2c7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/716a2c723972ad6d734b9b90272482a1246ffcb2) - **detect**: ✨ create detect module *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
