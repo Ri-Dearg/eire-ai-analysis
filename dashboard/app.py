@@ -150,6 +150,31 @@ def sidebar(df: pd.DataFrame) -> pd.DataFrame:
     return apply_filters(df, picked, period, min_words, drop_wire=drop_wire)
 
 
+def tab_articles(df: pd.DataFrame) -> None:
+    """Article-level drill-down, metadata and scores only.
+
+    Args:
+        df (pd.DataFrame): DataFrame to display.
+
+    """
+    cols = [
+        'article_id',
+        'outlet',
+        'published_date',
+        'section',
+        'author',
+        'word_count',
+        'is_wire',
+        *DETECTORS,
+    ]
+    show = df[cols].copy()
+    st.dataframe(show, width='stretch', hide_index=True, height=520)
+    st.caption(
+        'No article text is stored in this app — metadata and scores '
+        'only (local/legal constraint).'
+    )
+
+
 def tab_comparison(df: pd.DataFrame) -> None:
     """Legacy vs counter-consensus summary.
 
@@ -178,17 +203,17 @@ def tab_detectors(df: pd.DataFrame) -> None:
     """
     col = st.selectbox('Detector', options=list(DETECTORS), format_func=DETECTORS.get)
     scored = df[df[col].notna()]
-    st.caption(
-        f'{len(scored):,} of {len(df):,} filtered articles carry a '
-        f'{DETECTORS[col]} score.'
-    )
-    st.pyplot(_grouped_box(scored, col, DETECTORS[col], 'score'), width='stretch')
     if col == 'radar_score':
         st.info(
             'Raise the **minimum word count** slider (sidebar) to ~300 and '
             'watch The Liberal PRE box collapse: the spike is a short-text '
             'false positive, not pre-2022 AI.'
         )
+    st.caption(
+        f'{len(scored):,} of {len(df):,} filtered articles carry a '
+        f'{DETECTORS[col]} score.'
+    )
+    st.pyplot(_grouped_box(scored, col, DETECTORS[col], 'score'), width='stretch')
 
 
 def tab_overview(df: pd.DataFrame) -> None:
@@ -224,9 +249,18 @@ def main() -> None:
         'period · pre/post ChatGPT (30 Nov 2022)'
     )
     df = sidebar(load())
-    tab_overview(df)
-    tab_detectors(df)
-    tab_comparison(df)
+
+    t_over, t_det, t_cmp, t_art = st.tabs(
+        ['Overview', 'Detectors', 'Comparison', 'Articles']
+    )
+    with t_over:
+        tab_overview(df)
+    with t_det:
+        tab_detectors(df)
+    with t_cmp:
+        tab_comparison(df)
+    with t_art:
+        tab_articles(df)
 
 
 if __name__ == '__main__':
