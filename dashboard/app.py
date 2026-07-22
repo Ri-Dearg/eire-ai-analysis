@@ -17,6 +17,16 @@ BANNER = (
 )
 
 
+@st.cache_data
+def load() -> pd.DataFrame:
+    """Load the freshest scored corpus CSV (metadata + scores, no bodies)."""
+    src = SCORED
+    df = pd.read_csv(src)
+    df['word_count'] = pd.to_numeric(df['word_count'], errors='coerce')
+    df['is_wire'] = pd.to_numeric(df['is_wire'], errors='coerce').fillna(0)
+    return df
+
+
 def apply_filters(
     df: pd.DataFrame, outlets: list[str], period: str, min_words: int, *, drop_wire: bool
 ) -> pd.DataFrame:
@@ -72,3 +82,4 @@ def main() -> None:
         'Interim demo · corpus of 44,864 articles, 5,608 per outlet per '
         'period · pre/post ChatGPT (30 Nov 2022)'
     )
+    df = sidebar(load())
