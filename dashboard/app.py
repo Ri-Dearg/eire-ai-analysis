@@ -16,6 +16,13 @@ BANNER = (
     'All processing is local; no article text is loaded.'
 )
 
+DETECTORS = {
+    'radar_score': 'RADAR (P(AI))',
+    'perplexity_score': 'Perplexity baseline (uncalibrated)',
+    'fastdetectgpt_score': 'Fast-DetectGPT (partial)',
+    'binoculars_score': 'Binoculars (partial)',
+}
+
 
 @st.cache_data
 def load() -> pd.DataFrame:
@@ -75,6 +82,25 @@ def sidebar(df: pd.DataFrame) -> pd.DataFrame:
     return apply_filters(df, picked, period, min_words, drop_wire=drop_wire)
 
 
+def tab_comparison(df: pd.DataFrame) -> None:
+    """Legacy vs counter-consensus summary.
+
+    Args:
+        df (pd.DataFrame): DataFrame to display.
+
+    """
+    st.info(
+        'Legacy vs Counter-consensus. **Pending full ensemble scoring and calibration**'
+    )
+    med = df.groupby(['category', 'period'])[list(DETECTORS)].median().round(4)
+    st.dataframe(med, use_container_width=True)
+    st.caption(
+        'Medians of raw detector scores under the current filters. '
+        'Raw scores are not comparable across detectors and are not '
+        'calibrated probabilities.'
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title='Irish News AI-likelihood', layout='wide')
     st.title('AI-generated content in Irish news — explorer')
@@ -83,3 +109,8 @@ def main() -> None:
         'period · pre/post ChatGPT (30 Nov 2022)'
     )
     df = sidebar(load())
+    tab_comparison(df)
+
+
+if __name__ == '__main__':
+    main()
