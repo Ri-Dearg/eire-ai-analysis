@@ -1,3 +1,5 @@
+"""Streamlit dashboard: AI-likelihood over the Irish-news corpus (local-only)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,9 +8,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
+# ---------- DIRECTORIES ----------
 ROOT = Path(__file__).resolve().parent.parent
 SCORED = ROOT / 'data' / 'corpus_scored.csv'
 
+# ---------- LABEL SETTINGS ----------
 OUTLETS = ['rte', 'irish_examiner', 'the_liberal', 'gript']
 PALETTE = {
     'rte': '#449fab',
@@ -30,6 +34,7 @@ DETECTORS = {
 }
 
 
+# ---------- DATASET ----------
 @st.cache_data
 def load() -> pd.DataFrame:
     """Load the freshest scored corpus CSV (metadata + scores, no bodies).
@@ -45,6 +50,7 @@ def load() -> pd.DataFrame:
     return df
 
 
+# ---------- HELPER ----------
 # AI Designed
 def _grouped_box(df: pd.DataFrame, col: str, title: str, ylabel: str) -> plt.Figure:
     """Box plot of col by outlet x period.
@@ -126,6 +132,7 @@ def apply_filters(
     return output
 
 
+# ---------- LAYOUT ----------
 def sidebar(df: pd.DataFrame) -> pd.DataFrame:
     """Draw the global filter sidebar and return the filtered frame.
 
@@ -229,9 +236,7 @@ def tab_overview(df: pd.DataFrame) -> None:
     col3.metric('Median words', f'{df["word_count"].median():,.0f}' if len(df) else '—')
     col4.metric('Wire share', f'{df["is_wire"].mean():.1%}' if len(df) else '—')
     comp = (
-        df.groupby(['outlet', 'period'])
-        .size()
-        .unstack(fill_value=0)
+        df.pivot_table(index='outlet', columns='period', aggfunc='size', fill_value=0)
         .reindex(OUTLETS)
         .dropna(how='all')
     )
@@ -242,6 +247,7 @@ def tab_overview(df: pd.DataFrame) -> None:
 
 
 def main() -> None:
+    """Run dashboard."""
     st.set_page_config(page_title='Irish News AI-likelihood', layout='wide')
     st.title('AI-generated content in Irish news — explorer')
     st.caption(
