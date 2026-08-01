@@ -1,9 +1,9 @@
 """Melt + clean the gsingh1 dataset into the known-AI calibration anchor."""
 
 import csv
-import hashlib
 import logging
 import sys
+from collections import Counter
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -15,32 +15,22 @@ OUT = CALIBRATION_DIR / 'known_ai.csv'
 
 MIN_WORDS = 50
 NON_MODEL_COLS = frozenset({'prompt', 'Human_story'})
+FIELDS = ['id', 'model', 'n_words', 'n_chars', 'text']
 
 csv.field_size_limit(1 << 24)
 
 
-def _resume(output: Path) -> tuple[set[str], int]:
-    """Return (dedup hashes, last source-row index) from an existing output.
-
-    Lets the pass resume after an interruption.
+def model_label(column: str) -> str:
+    """Return a short model label for a model column name.
 
     Args:
-        output (Path): Existing ``known_ai.csv`` (may be absent).
+        column (str): Raw column name.
 
     Returns:
-        tuple[set[str], int]: Kept text hashes and the last processed row index
-            (-1 if the file is absent/empty).
+        str: The final path segment (e.g. ``yi-large``).
 
     """
-    seen: set[str] = set()
-    last_row = -1
-    if not output.exists():
-        return seen, last_row
-    with output.open(encoding='utf-8') as file:
-        for row in csv.DictReader(file):
-            seen.add(hashlib.sha1(row['text'].encode('utf-8')).hexdigest())
-            last_row = max(last_row, int(row['id'].rsplit(':', 1)[1]))
-    return seen, last_row
+    return column.rsplit('/', 1)[-1]
 
 
 def clean(src: Path, output: Path):
@@ -56,7 +46,15 @@ def clean(src: Path, output: Path):
 
     """
     output.parent.mkdir(parents=True, exist_ok=True)
-    seen, last = _resume(output)
+    with (
+        src.open(encoding='utf-8') as file_input,
+        output.open('w', newline='', encoding='utf-8') as file_output,
+    ):
+        reader = csv.DictReader(file_input)
+        model_cols = [c for c in reader.fieldnames or [] if c not in NON_MODEL_COLS]
+        labels = {c: model_label(c) for c in model_cols}
+        writer = csv.DictWriter(file_output, fieldnames=FIELDS)
+        writer.writeheader()
 
 
 def main() -> int:
