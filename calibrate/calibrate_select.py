@@ -2,6 +2,7 @@
 
 import csv
 import random
+import sys
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -12,7 +13,7 @@ from sample.sample import OUTLETS as SAMPLER_OUTLETS
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
 CALIBRATE_DIR = DATA / 'calibration'
-CALIB_DIR = DATA / 'calibration'
+CALIBRATION_DIR = DATA / 'calibration'
 
 SEED = 37
 HUMAN_TARGET = 2000  # Per outlet
@@ -141,11 +142,11 @@ def write_outputs(outlet: str, drawn: list[dict]) -> None:
         drawn (list[dict]): The drawn calibration rows.
 
     """
-    CALIB_DIR.mkdir(parents=True, exist_ok=True)
+    CALIBRATION_DIR.mkdir(parents=True, exist_ok=True)
     ordered = sorted(drawn, key=lambda row: (row['published_date'], row['url']))
     payload = '\n'.join(row['url'] for row in ordered) + '\n'
     for name in (f'{outlet}_human.txt', f'{outlet}_calibration.log'):
-        (CALIB_DIR / name).write_text(payload, encoding='utf-8')
+        (CALIBRATION_DIR / name).write_text(payload, encoding='utf-8')
 
 
 def main() -> int:
@@ -157,5 +158,15 @@ def main() -> int:
         candidate_articles = load_candidates(outlet)
         drawn_articles = stratified_draw(candidate_articles, HUMAN_TARGET, rng)
         write_outputs(outlet, drawn_articles)
-
+        total += len(drawn_articles)
+        months = len({row['month'] for row in drawn_articles})
+        print(
+            f'{outlet:16}{len(candidate_articles):>16,}{len(drawn_articles):>8,}{months:>8}'
+        )
+    print(f'{"TOTAL":16}{"":>16}{total:>8,}')
+    (f'wrote draw lists + *_calibration.log to {CALIBRATION_DIR}')
     return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
