@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from crawler import Article, _clean_url
+from crawl import Article, _clean_url
 
 logger = logging.getLogger(__name__)
 
