@@ -2,6 +2,7 @@
 
 import csv
 import random
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -17,6 +18,7 @@ HUMAN_TARGET = 2000  # Per outlet
 START = date(2019, 1, 1)  # inclusive
 RELEASE = date(2022, 11, 30)  # exclusive
 OUTLETS = ('rte', 'irish_examiner', 'the_liberal', 'gript')
+
 csv.field_size_limit(1 << 24)
 
 
@@ -97,6 +99,37 @@ def load_candidates(outlet: str) -> list[dict]:
                 }
             )
     return output
+
+
+def stratified_draw(rows: list[dict], target: int, rng: random.Random) -> list[dict]:
+    """Draw target rows stratified by year+month.
+
+    Args:
+        rows (list[dict]): Candidate rows.
+        target (int): Number to draw.
+        rng (random.Random): Seeded RNG for reproducibility.
+
+    Returns:
+        list[dict]: The drawn rows.
+
+    """
+    if len(rows) <= target:
+        return list(rows)
+    strata: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        strata[row['month']].append(row)
+    total = len(rows)
+    allocation = {key: int(target * len(value) / total) for key, value in strata.items()}
+    short = target - sum(allocation.values())
+    spare = sorted(
+        strata, key=lambda key: len(strata[key]) - allocation[key], reverse=True
+    )
+    for key in spare[:short]:
+        allocation[key] += 1
+    picked: list[dict] = []
+    for key, value in strata.items():
+        picked.extend(rng.sample(value, min(allocation[key], len(value))))
+    return picked
 
 
 def main() -> int:
