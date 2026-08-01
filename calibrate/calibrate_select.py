@@ -10,7 +10,7 @@ from sample.sample import OUTLETS as SAMPLER_OUTLETS
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
-CALIB_DIR = DATA / 'calibration'
+CALIBRATE_DIR = DATA / 'calibration'
 
 SEED = 37
 HUMAN_TARGET = 2000  # Per outlet
@@ -64,10 +64,39 @@ def excluded_clean_urls(outlet: str) -> set[str]:
     return clean
 
 
-def load_candidates(outlet: str):
+def load_candidates(outlet: str) -> list[dict]:
+    """Return the eligible held-out pre-ChatGPT inventory rows for one outlet.
+
+    Args:
+        outlet (str): Outlet name.
+
+    Returns:
+        list[dict]: Rows with ``url``, ``published_date``, ``year``, ``month``.
+
+    """
     config = SAMPLER_OUTLETS[outlet]
     used_articles = excluded_clean_urls(outlet)
-    print(used_articles)
+    output: list[dict] = []
+    with (DATA / f'{outlet}_inventory.csv').open(encoding='utf-8') as file:
+        for row in csv.DictReader(file):
+            pub_date = row['published_date'] or ''
+            if not pub_date:
+                continue
+            if not START <= date.fromisoformat(pub_date) < RELEASE:
+                continue
+            if config.category(row['url']) in config.exclude:
+                continue
+            if _clean_url(row['url']) in used_articles:
+                continue
+            output.append(
+                {
+                    'url': row['url'],
+                    'published_date': pub_date,
+                    'year': pub_date[:4],
+                    'month': pub_date[:7],
+                }
+            )
+    return output
 
 
 def main() -> int:
