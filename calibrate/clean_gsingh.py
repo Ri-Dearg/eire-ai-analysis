@@ -20,7 +20,7 @@ FIELDS = ['id', 'model', 'n_words', 'n_chars', 'text']
 
 csv.field_size_limit(1 << 24)
 
-# Refusal regex structured by AI.
+# Regex structured by AI.
 # Refusal / non-article model output (checked near the article start). The
 # apostrophe class matches the straight quote and the curly U+2019 the dataset
 # uses (escaped so no ambiguous glyph appears in source).
@@ -40,6 +40,16 @@ ERROR_RE = re.compile(
     r'HTTPSConnectionPool|NameResolutionError',
     re.IGNORECASE,
 )
+
+_MD_HEADER = re.compile(r'(?m)^\s{0,3}#{1,6}\s*')
+_SCAFFOLD_LINE = re.compile(
+    r'(?im)^\s*\**\s*'
+    r'(title|subtitle|byline|dateline|subheadline|published|date|author)\s*:.*$'
+)
+_BYLINE_PLACEHOLDER = re.compile(r'(?im)^\s*\**\s*by\s+\[[^\]]+\].*$')
+_BRACKET_PH = re.compile(r'\[[^\]\n]{0,60}\]')
+_EMPHASIS = re.compile(r'\*\*|\*|__|`|~~')
+_WS = re.compile(r'\s+')
 
 
 def is_refusal_or_error(text: str) -> str | None:
@@ -72,6 +82,26 @@ def model_label(column: str) -> str:
     return column.rsplit('/', 1)[-1]
 
 
+def normalise(text: str) -> str:
+    """Normalise a model article toward plain published-prose register.
+
+    Strips markdown headers/emphasis markers.
+
+    Args:
+        text (str): Raw model cell.
+
+    Returns:
+        str: The normalised article text.
+
+    """
+    t = _MD_HEADER.sub('', text)
+    t = _SCAFFOLD_LINE.sub('', t)
+    t = _BYLINE_PLACEHOLDER.sub('', t)
+    t = _BRACKET_PH.sub('', t)
+    t = _EMPHASIS.sub('', t)
+    return _WS.sub(' ', t).strip()
+
+
 def clean_cell(raw: str, seen: set[str]) -> tuple[str | None, str]:
     """Clean one model cell; return (text_or_None, reason).
 
@@ -86,7 +116,9 @@ def clean_cell(raw: str, seen: set[str]) -> tuple[str | None, str]:
     if not raw or not raw.strip():
         return None, 'empty'
     reason = is_refusal_or_error(raw)
-
+    if reason:
+        return None, reason
+    text = normalise(raw)
     return ''
 
 
