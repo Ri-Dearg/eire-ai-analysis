@@ -1,6 +1,7 @@
 """Melt + clean the gsingh1 dataset into the known-AI calibration anchor."""
 
 import csv
+import hashlib
 import logging
 import re
 import sys
@@ -24,6 +25,7 @@ csv.field_size_limit(1 << 24)
 # Refusal / non-article model output (checked near the article start). The
 # apostrophe class matches the straight quote and the curly U+2019 the dataset
 # uses (escaped so no ambiguous glyph appears in source).
+# ruff: ignore[RUF001]
 REFUSAL_RE = re.compile(
     r"i['’]?m sorry|i am sorry|i cannot|i can['’]?t\b|i can not|"
     r"as an ai\b|as a language model|i do(?:n['’]?t| not) have access|"
@@ -119,10 +121,16 @@ def clean_cell(raw: str, seen: set[str]) -> tuple[str | None, str]:
     if reason:
         return None, reason
     text = normalise(raw)
-    return ''
+    if len(text.split()) < MIN_WORDS:
+        return None, 'too_short'
+    output_hash = hashlib.sha1(text.encode('utf-8')).hexdigest()  # noqa: S324 Not a security use.
+    if output_hash in seen:
+        return None, 'dup'
+    seen.add(output_hash)
+    return text, ''
 
 
-def clean(src: Path, output: Path):
+def clean(src: Path, output: Path) -> tuple[Counter, Counter, int, list[int]]:
     """Melt + clean the dataset, streaming rows to out (checkpoint-resumable).
 
     Args:
@@ -130,11 +138,15 @@ def clean(src: Path, output: Path):
         output (Path): Output known_ai.csv (appended to if resuming).
 
     Returns:
-        tuple[Counter, Counter, int]: Kept-per-model, drop reasons (this run),
+        tuple[Counter, Counter, int]: Kept-per-model, drop reasons,
             and the number of source rows processed this run.
 
     """
     seen: set[str] = set()
+    kept: Counter = Counter()
+    drops: Counter = Counter()
+    words: list[int] = []
+    processed = 0
     output.parent.mkdir(parents=True, exist_ok=True)
     with (
         src.open(encoding='utf-8') as file_input,
@@ -145,16 +157,33 @@ def clean(src: Path, output: Path):
         labels = {c: model_label(c) for c in model_cols}
         writer = csv.DictWriter(file_output, fieldnames=FIELDS)
         writer.writeheader()
-        for i, row in enumerate(reader):
+        for index, row in enumerate(reader):
             for col in model_cols:
                 text, reason = clean_cell(row[col] or '', seen)
+                if text is None:
+                    drops[reason] += 1
+                    continue
+                n_words = len(text.split())
+                writer.writerow(
+                    {
+                        'id': f'{labels[col]}:{index}',
+                        'model': labels[col],
+                        'n_words': n_words,
+                        'n_chars': len(text),
+                        'text': text,
+                    }
+                )
+                kept[labels[col]] += 1
+                words.append(n_words)
+            processed += 1
+    return kept, drops, processed, words
 
 
 def main() -> int:
     """Clean the gsingh1 dataset into known_ai.csv (resumable) + summarise."""
     if not SRC.exists():
         logger.error(
-            'ERROR: %s not found, please download gsingh1-py/train first (see RUNBOOK.md).',
+            'ERROR: %s not found, please download gsingh1-py/train first.',
             SRC,
         )
         return 1
