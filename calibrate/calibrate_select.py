@@ -1,6 +1,7 @@
 """Select the per-outlet, held-out human written articles."""
 
 import csv
+import logging
 import random
 import sys
 from collections import defaultdict
@@ -9,6 +10,8 @@ from pathlib import Path
 
 from crawl import _clean_url
 from sample.sample import OUTLETS as SAMPLER_OUTLETS
+
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
@@ -150,7 +153,12 @@ def write_outputs(outlet: str, drawn: list[dict]) -> None:
 
 
 def main() -> int:
-    """Select the human anchor for every outlet and print a count summary."""
+    """Select the human anchor for every outlet and print a count summary.
+
+    Returns:
+        int: Success of failure.
+
+    """
     print(f'{"outlet":16}{"un-sampled pool":>16}{"drawn":>8}{"months":>8}')
     total = 0
     for outlet in OUTLETS:
@@ -164,7 +172,7 @@ def main() -> int:
             f'{outlet:16}{len(candidate_articles):>16,}{len(drawn_articles):>8,}{months:>8}'
         )
     print(f'{"TOTAL":16}{"":>16}{total:>8,}')
-    (f'wrote draw lists + *_calibration.log to {CALIBRATION_DIR}')
+    logger.info('wrote draw lists + *_calibration.log to %s', CALIBRATION_DIR)
     return 0
 
 
