@@ -12,6 +12,7 @@ from sample.sample import OUTLETS as SAMPLER_OUTLETS
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
 CALIBRATE_DIR = DATA / 'calibration'
+CALIB_DIR = DATA / 'calibration'
 
 SEED = 37
 HUMAN_TARGET = 2000  # Per outlet
@@ -132,11 +133,29 @@ def stratified_draw(rows: list[dict], target: int, rng: random.Random) -> list[d
     return picked
 
 
+def write_outputs(outlet: str, drawn: list[dict]) -> None:
+    """Write the draw list and the persistent exclusion log.
+
+    Args:
+        outlet (str): Outlet slug.
+        drawn (list[dict]): The drawn calibration rows.
+
+    """
+    CALIB_DIR.mkdir(parents=True, exist_ok=True)
+    ordered = sorted(drawn, key=lambda row: (row['published_date'], row['url']))
+    payload = '\n'.join(row['url'] for row in ordered) + '\n'
+    for name in (f'{outlet}_human.txt', f'{outlet}_calibration.log'):
+        (CALIB_DIR / name).write_text(payload, encoding='utf-8')
+
+
 def main() -> int:
     """Select the human anchor for every outlet and print a count summary."""
     print(f'{"outlet":16}{"un-sampled pool":>16}{"drawn":>8}{"months":>8}')
     total = 0
     for outlet in OUTLETS:
         rng = random.Random(SEED)  # per-outlet seed for a stable draw
-        load_candidates(outlet)
+        candidate_articles = load_candidates(outlet)
+        drawn_articles = stratified_draw(candidate_articles, HUMAN_TARGET, rng)
+        write_outputs(outlet, drawn_articles)
+
     return 0
