@@ -21,12 +21,30 @@ csv.field_size_limit(1 << 24)
 
 
 def _read_lines(path: Path) -> set[str]:
+    """Return the non-empty lines of ``path`` as a set (empty if absent).
+
+    Args:
+        path (Path): Path to file to read.
+
+    Returns:
+        set[str]: Non-empty lines from the file.
+
+    """
     if not path.exists():
         return set()
     return {line for line in path.read_text(encoding='utf-8').splitlines() if line}
 
 
 def excluded_clean_urls(outlet: str) -> set[str]:
+    """Return the set of cleaned URLs already used by the corpus, for one outlet.
+
+    Args:
+        outlet (str): Outlet name.
+
+    Returns:
+        set[str]: Cleaned URLs to exclude from calibration.
+
+    """
     raw = _read_lines(DATA / f'{outlet}_sampled.log')
     if outlet == 'gript':
         raw |= _read_lines(DATA / 'gript_premium.log')
