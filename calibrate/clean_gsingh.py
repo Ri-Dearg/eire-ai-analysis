@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 CALIBRATION_DIR = ROOT / 'data' / 'calibration'
 SRC = CALIBRATION_DIR / 'gsingh1_train' / 'train.csv'
-OUT = CALIBRATION_DIR / 'known_ai.csv'
+OUTPUT = CALIBRATION_DIR / 'known_ai.csv'
 
 MIN_WORDS = 50
 NON_MODEL_COLS = frozenset({'prompt', 'Human_story'})
@@ -187,6 +187,25 @@ def main() -> int:
             SRC,
         )
         return 1
+    kept, drops, processed, words = clean(SRC, OUTPUT)
+
+    logger.info(
+        'processed %d source rows; kept %d (drops %s)',
+        processed,
+        sum(kept.values()),
+        dict(sorted(drops.items())),
+    )
+    logger.info('known_ai.csv holds %d AI articles', sum(kept.values()))
+    logger.info('  per model: %s', dict(sorted(kept.items())))
+    if words:
+        words.sort()
+        logger.info(
+            '  word_count: min %d, median %d, max %d',
+            words[0],
+            words[len(words) // 2],
+            words[-1],
+        )
+    logger.info('-> %s', OUTPUT)
     return 0
 
 
