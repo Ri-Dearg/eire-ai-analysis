@@ -11,6 +11,7 @@ from pathlib import Path
 from crawl import _clean_url
 from sample.sample import OUTLETS as SAMPLER_OUTLETS
 
+# ---------- CONFIG ----------
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,6 +28,7 @@ OUTLETS = ('rte', 'irish_examiner', 'the_liberal', 'gript')
 csv.field_size_limit(1 << 24)
 
 
+# ---------- READ FILES ----------
 def _read_lines(path: Path) -> set[str]:
     """Return the non-empty lines of ``path`` as a set (empty if absent).
 
@@ -106,6 +108,7 @@ def load_candidates(outlet: str) -> list[dict]:
     return output
 
 
+# ---------- SELECTION ----------
 def stratified_draw(rows: list[dict], target: int, rng: random.Random) -> list[dict]:
     """Draw target rows stratified by year+month.
 
@@ -137,6 +140,7 @@ def stratified_draw(rows: list[dict], target: int, rng: random.Random) -> list[d
     return picked
 
 
+# ---------- OUTPUT ----------
 def write_outputs(outlet: str, drawn: list[dict]) -> None:
     """Write the draw list and the persistent exclusion log.
 
