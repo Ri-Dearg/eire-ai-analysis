@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
-import logging
+
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -21,6 +23,13 @@ KNOWN_AI = CALIBRATION_DIR / 'known_ai.csv'
 INPUTS = DETECTION_DIR / 'score_inputs.csv'
 
 MIN_HUMAN_CHARS = 400
+
+FALSE_POSITIVE_TARGETS = (0.01, 0.05)
+
+
+OUTLETS = ('rte', 'irish_examiner', 'the_liberal', 'gript')
+PRIMARY = ('binoculars', 'fastdetectgpt', 'radar')
+ALL_DETECTORS = (*PRIMARY, 'perplexity')
 
 
 def _human_usable_row(row: pd.Series, seen: set[str]) -> bool:  # noqa: PLR0911
@@ -77,6 +86,23 @@ def human_anchor_df() -> pd.DataFrame:
         index=human_parsed.index,
     )
     return human_parsed[mask].drop(columns=['_ord', '_aid'])
+
+
+def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
+    """Return the score threshold giving false-positive rate on humans.
+
+    Args:
+        human_scores (np.ndarray): Detector scores on known-human text.
+        fpr (float): Target false-positive rate in (0, 1).
+
+    Returns:
+        float: The score threshold (nan if no finite human scores).
+
+    """
+    score = human_scores[np.isfinite(human_scores)]
+    if score.size == 0:
+        return float('nan')
+    return float(np.quantile(score, 1.0 - fpr, method='higher'))
 
 
 def build_inputs() -> Path:
@@ -151,6 +177,7 @@ def build_inputs() -> Path:
             'text',
         ],
     )
+
     output.to_csv(INPUTS, index=False)
     logger.info(
         'wrote %d score inputs (%d human, %d ai, %d corpus) -> %s',
@@ -163,9 +190,48 @@ def build_inputs() -> Path:
     return INPUTS
 
 
+def calibrate(inputs: pd.DataFrame, scores: dict[str, pd.Series]) -> pd.DataFrame:
+    """Compute per-detector, per-outlet thresholds, FPR and TPR.
+
+    Args:
+        inputs (pd.DataFrame): The score-input table (with`group/outlet).
+        scores (dict[str, pd.Series]): {detector: id->score}.
+
+    Returns:
+        pd.DataFrame: One row per (detector, outlet, fpr_target) with the
+            threshold, realised FPR, overall TPR, and per-model TPR columns.
+
+    """
+    human = inputs[inputs.group == 'human']
+    ai = inputs[inputs.group == 'ai']
+    records: list[dict] = []
+    for detector in ALL_DETECTORS:
+        scoring = scores[detector]
+        ai_scoring = ai['id'].map(scoring).to_numpy(dtype=float)
+        for outlet in OUTLETS:
+            human_ids = human[human.outlet == outlet]['id']
+            human_scoring = human_ids.map(scoring).to_numpy(dtype=float)
+            for false_positive_rate in FALSE_POSITIVE_TARGETS:
+                threshold = threshold_at_fpr(human_scoring, false_positive_rate)
+    return pd.DataFrame(records)
+
+
 def main() -> int:
     """Assemble inputs (if needed) and, once scores exist, emit all outputs."""
     if not INPUTS.exists():
         build_inputs()
-        return 0
-    return 1
+    missing = [
+        detector
+        for detector in ALL_DETECTORS
+        if not (DETECTION_DIR / f'{detector}.csv').exists()
+    ]
+    if missing:
+        logger.error(
+            'Detector score files missing: %s. Run `python -m detect.score` '
+            'then re-run. Error: %s',
+            ', '.join(missing),
+            sys.stderr,
+        )
+        return 1
+    inputs = pd.read_csv(INPUTS, dtype=str).fillna('')
+    return 0
