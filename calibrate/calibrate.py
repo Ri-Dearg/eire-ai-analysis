@@ -88,6 +88,14 @@ def human_anchor_df() -> pd.DataFrame:
     return human_parsed[mask].drop(columns=['_ord', '_aid'])
 
 
+def positive_rate(scores: np.ndarray, threshold: float) -> float:
+    """Return the fraction of finite scores at or above threshold."""
+    scoring = scores[np.isfinite(scores)]
+    if scoring.size == 0:
+        return float('nan')
+    return float(np.mean(scoring >= threshold))
+
+
 def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
     """Return the score threshold giving false-positive rate on humans.
 
@@ -96,7 +104,7 @@ def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
         fpr (float): Target false-positive rate in (0, 1).
 
     Returns:
-        float: The score threshold (nan if no finite human scores).
+        float: The score threshold.
 
     """
     score = human_scores[np.isfinite(human_scores)]
@@ -213,6 +221,19 @@ def calibrate(inputs: pd.DataFrame, scores: dict[str, pd.Series]) -> pd.DataFram
             human_scoring = human_ids.map(scoring).to_numpy(dtype=float)
             for false_positive_rate in FALSE_POSITIVE_TARGETS:
                 threshold = threshold_at_fpr(human_scoring, false_positive_rate)
+                record = {
+                    'detector': detector,
+                    'outlet': outlet,
+                    'fpr_target': false_positive_rate,
+                    'threshold': threshold,
+                    'n_human': int(np.isfinite(human_scoring).sum()),
+                    'fpr_realised': positive_rate(human_scoring, threshold),
+                    'tpr': positive_rate(ai_scoring, threshold),
+                }
+                for model, group in ai.groupby('model'):
+                    m_sc = group['id'].map(scoring).to_numpy(dtype=float)
+                    record[f'tpr_{model}'] = positive_rate(m_sc, threshold)
+                records.append(record)
     return pd.DataFrame(records)
 
 
