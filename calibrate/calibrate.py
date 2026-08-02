@@ -89,7 +89,16 @@ def human_anchor_df() -> pd.DataFrame:
 
 
 def positive_rate(scores: np.ndarray, threshold: float) -> float:
-    """Return the fraction of finite scores at or above threshold."""
+    """Return the fraction of finite scores at or above threshold.
+
+    Args:
+        scores (np.ndarray): Scores as an array.
+        threshold (float): Scoring threshold
+
+    Returns:
+        float: Scores beyond the threshold.
+
+    """
     scoring = scores[np.isfinite(scores)]
     if scoring.size == 0:
         return float('nan')
@@ -198,6 +207,21 @@ def build_inputs() -> Path:
     return INPUTS
 
 
+def _load_scores(detector: str) -> pd.Series:
+    """Return an Series from a detector checkpoint CSV.
+
+    Args:
+        detector (str): Detector name
+
+    Returns:
+        pd.Series: Detector scores as dataframe.
+
+    """
+    path = DETECTION_DIR / f'{detector}.csv'
+    df = pd.read_csv(path)
+    return df.set_index('id').iloc[:, 0].astype(float)
+
+
 def calibrate(inputs: pd.DataFrame, scores: dict[str, pd.Series]) -> pd.DataFrame:
     """Compute per-detector, per-outlet thresholds, FPR and TPR.
 
@@ -231,8 +255,8 @@ def calibrate(inputs: pd.DataFrame, scores: dict[str, pd.Series]) -> pd.DataFram
                     'tpr': positive_rate(ai_scoring, threshold),
                 }
                 for model, group in ai.groupby('model'):
-                    m_sc = group['id'].map(scoring).to_numpy(dtype=float)
-                    record[f'tpr_{model}'] = positive_rate(m_sc, threshold)
+                    model_scoring = group['id'].map(scoring).to_numpy(dtype=float)
+                    record[f'tpr_{model}'] = positive_rate(model_scoring, threshold)
                 records.append(record)
     return pd.DataFrame(records)
 
@@ -255,4 +279,9 @@ def main() -> int:
         )
         return 1
     inputs = pd.read_csv(INPUTS, dtype=str).fillna('')
+    scores = {detector: _load_scores(detector) for detector in ALL_DETECTORS}
+
+    threshold_df = calibrate(inputs, scores)
+    threshold_df.to_csv(DETECTION_DIR / 'calibration_report.csv', index=False)
+
     return 0
