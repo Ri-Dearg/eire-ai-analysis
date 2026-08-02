@@ -28,8 +28,8 @@ FALSE_POSITIVE_TARGETS = (0.01, 0.05)
 
 
 OUTLETS = ('rte', 'irish_examiner', 'the_liberal', 'gript')
-PRIMARY = ('binoculars', 'fastdetectgpt', 'radar')
-ALL_DETECTORS = (*PRIMARY, 'perplexity')
+PRIMARY = ('binoculars', 'fastdetectgpt', 'perplexity')
+ALL_DETECTORS = (*PRIMARY, 'radar')
 
 
 def _human_usable_row(row: pd.Series, seen: set[str]) -> bool:  # noqa: PLR0911
@@ -86,6 +86,65 @@ def human_anchor_df() -> pd.DataFrame:
         index=human_parsed.index,
     )
     return human_parsed[mask].drop(columns=['_ord', '_aid'])
+
+
+def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Combine per-detector binary calls.
+
+    Args:
+        calls (dict[str, np.ndarray]): Detector bool for the primary detectors.
+
+    Returns:
+        dict[str, np.ndarray]: majority (>=2), unanimous (all),
+            any1 (>=1) boolean arrays.
+
+    """
+    stack = np.vstack([calls[detector].astype(int) for detector in PRIMARY])
+    votes = stack.sum(axis=0)
+    num = len(PRIMARY)
+    return {
+        'majority': votes >= num // 2 + 1,
+        'unanimous': votes == num,
+        'any1': votes >= 1,
+    }
+
+
+def _binary_calls(
+    corpus: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+) -> pd.DataFrame:
+    """Return per-article binary results for each detector at one FPR target.
+
+    Uses each article's **outlet** threshold. Adds ensemble columns.
+
+    Args:
+        corpus (pd.DataFrame): The collected db / dataframe.
+        scores (dict[str, pd.Series]): Scoring of a data set.
+        threshold_df (pd.DataFrame): The threshold df.
+        false_positive_rate (float): False Positive Rate.
+
+    Returns:
+        pd.DataFrame: Dataframe with binary results for each detector.
+
+    """
+    calls: dict[str, np.ndarray] = {}
+    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
+    for detector in ALL_DETECTORS:
+        lut = threshold_fpr_df[threshold_fpr_df.detector == detector].set_index('outlet')[
+            'threshold'
+        ]
+        article_thr = corpus['outlet'].map(lut).to_numpy(dtype=float)
+        article_score = corpus['id'].map(scores[detector]).to_numpy(dtype=float)
+        calls[detector] = np.isfinite(article_score) & (article_score >= article_thr)
+    ensemble = ensemble_calls({detector: calls[detector] for detector in PRIMARY})
+    output = corpus[['id', 'outlet', 'period', 'is_wire', 'word_count']].copy()
+    for detector in ALL_DETECTORS:
+        output[f'{detector}_call'] = calls[detector]
+    for name, arr in ensemble.items():
+        output[f'ensemble_{name}'] = arr
+    return output
 
 
 def positive_rate(scores: np.ndarray, threshold: float) -> float:
@@ -283,5 +342,10 @@ def main() -> int:
 
     threshold_df = calibrate(inputs, scores)
     threshold_df.to_csv(DETECTION_DIR / 'calibration_report.csv', index=False)
+
+    corpus = inputs[inputs.group == 'corpus'].copy()
+
+    for false_positive_rate in FALSE_POSITIVE_TARGETS:
+        binnary = _binary_calls(corpus, scores, threshold_df, false_positive_rate)
 
     return 0
