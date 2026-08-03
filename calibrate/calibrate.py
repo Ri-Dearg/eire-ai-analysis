@@ -22,16 +22,18 @@ HUMAN_PARSED = CALIBRATION_DIR / 'human_parsed.csv'
 KNOWN_AI = CALIBRATION_DIR / 'known_ai.csv'
 INPUTS = DETECTION_DIR / 'score_inputs.csv'
 
+# ---------- CALCULATION FIGURES ----------
 MIN_HUMAN_CHARS = 400
 LENGTH_BANDS = ((0, 150), (150, 300), (300, 10**9))
 FALSE_POSITIVE_TARGETS = (0.01, 0.05)
 
-
+# ---------- VARIABLE STRINGS ----------
 OUTLETS = ('rte', 'irish_examiner', 'the_liberal', 'gript')
 PRIMARY = ('binoculars', 'fastdetectgpt', 'perplexity')
 ALL_DETECTORS = (*PRIMARY, 'radar')
 
 
+# ---------- FILTERING ----------
 def _human_usable_row(row: pd.Series, seen: set[str]) -> bool:  # noqa: PLR0911
     """Return True if a human-anchor row survives the corpus drop rules.
 
@@ -88,6 +90,58 @@ def human_anchor_df() -> pd.DataFrame:
     return human_parsed[mask].drop(columns=['_ord', '_aid'])
 
 
+# ---------- HELPER CALCULATIONS ----------
+def _length_band(words: int) -> str:
+    """Return the length-band label for a word count.
+
+    Args:
+        words (int): Number of words.
+
+    Returns:
+        str: Either string of length, or na.
+
+    """
+    for low, high in LENGTH_BANDS:
+        if low <= words < high:
+            return f'{low}-{high if high < 10**9 else "inf"}'
+    return 'na'
+
+
+def positive_rate(scores: np.ndarray, threshold: float) -> float:
+    """Return the fraction of finite scores at or above threshold.
+
+    Args:
+        scores (np.ndarray): Scores as an array.
+        threshold (float): Scoring threshold
+
+    Returns:
+        float: Scores beyond the threshold.
+
+    """
+    scoring = scores[np.isfinite(scores)]
+    if scoring.size == 0:
+        return float('nan')
+    return float(np.mean(scoring >= threshold))
+
+
+def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
+    """Return the score threshold giving false-positive rate on humans.
+
+    Args:
+        human_scores (np.ndarray): Detector scores on known-human text.
+        fpr (float): Target false-positive rate in (0, 1).
+
+    Returns:
+        float: The score threshold.
+
+    """
+    score = human_scores[np.isfinite(human_scores)]
+    if score.size == 0:
+        return float('nan')
+    return float(np.quantile(score, 1.0 - fpr, method='higher'))
+
+
+# ---------- THRESHOLD CHECKS ----------
 def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     """Combine per-detector binary calls.
 
@@ -147,22 +201,6 @@ def _binary_calls(
     return output
 
 
-def _length_band(words: int) -> str:
-    """Return the length-band label for a word count.
-
-    Args:
-        words (int): Number of words.
-
-    Returns:
-        str: Either string of length, or na.
-
-    """
-    for low, high in LENGTH_BANDS:
-        if low <= words < high:
-            return f'{low}-{high if high < 10**9 else "inf"}'
-    return 'na'
-
-
 def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
     """Detected-rate per outlet x period: all / non-wire / by length band.
 
@@ -215,23 +253,7 @@ def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def positive_rate(scores: np.ndarray, threshold: float) -> float:
-    """Return the fraction of finite scores at or above threshold.
-
-    Args:
-        scores (np.ndarray): Scores as an array.
-        threshold (float): Scoring threshold
-
-    Returns:
-        float: Scores beyond the threshold.
-
-    """
-    scoring = scores[np.isfinite(scores)]
-    if scoring.size == 0:
-        return float('nan')
-    return float(np.mean(scoring >= threshold))
-
-
+# ---------- FALSE POSITIVE RATE CALCULATIONS ----------
 def ensemble_fpr_on_anchor(
     inputs: pd.DataFrame,
     scores: dict[str, pd.Series],
@@ -246,7 +268,7 @@ def ensemble_fpr_on_anchor(
         inputs (pd.DataFrame): The score-input table (needs group/outlet).
         scores (dict[str, pd.Series]): {detector: id->score}.
         threshold_df (pd.DataFrame): Output of :func:`calibrate`.
-        false_positive_rate (float): The per-detector FPR target the thresholds were set at.
+        false_positive_rate (float): The per-detector FPR target the thresholds.
         primary (tuple[str, ...]): Ensemble members.
         min_votes (int): Votes required to flag (2 = majority of 3, 1 = any-1).
 
@@ -303,23 +325,7 @@ def sanity_pre_fpr(
     )
 
 
-def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
-    """Return the score threshold giving false-positive rate on humans.
-
-    Args:
-        human_scores (np.ndarray): Detector scores on known-human text.
-        fpr (float): Target false-positive rate in (0, 1).
-
-    Returns:
-        float: The score threshold.
-
-    """
-    score = human_scores[np.isfinite(human_scores)]
-    if score.size == 0:
-        return float('nan')
-    return float(np.quantile(score, 1.0 - fpr, method='higher'))
-
-
+# ---------- FILES ----------
 def build_inputs() -> Path:
     """Assemble the id -> text table to score (human + AI + corpus).
 
@@ -405,6 +411,7 @@ def build_inputs() -> Path:
     return INPUTS
 
 
+# ---------- CALIBRATION ----------
 def _load_scores(detector: str) -> pd.Series:
     """Return an Series from a detector checkpoint CSV.
 
