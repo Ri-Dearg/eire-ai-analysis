@@ -142,6 +142,36 @@ def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
 
 
 # ---------- THRESHOLD CHECKS ----------
+def adjusted_table(
+    headline: pd.DataFrame,
+    ensemble_fpr: dict[str, float],
+    ensemble_tpr: dict[str, float],
+) -> pd.DataFrame:
+    """Attach the sensitivity-adjusted lower bound to a headline table.
+
+    Args:
+        headline (pd.DataFrame): Output of :func:`headline_table`.
+        ensemble_fpr (dict[str, float]): From :func:`ensemble_fpr_on_anchor`.
+        ensemble_tpr (dict[str, float]): From :func:`ensemble_tpr_on_known_ai`.
+
+    Returns:
+        pd.DataFrame: headline plus ensemble_fpr, ensemble_tpr and
+            lower_bound columns.
+
+    """
+    output = headline.copy()
+    output['ensemble_fpr'] = output['outlet'].map(ensemble_fpr)
+    output['ensemble_tpr'] = output['outlet'].map(ensemble_tpr)
+    output['lower_bound'] = [
+        lower_bound(p, f, t)
+        for p, f, t in zip(
+            output['detected'],
+            output['ensemble_fpr'],
+            output['ensemble_tpr'],
+            strict=True,
+        )
+    ]
+    return output
 
 
 def _binary_calls(
@@ -201,6 +231,51 @@ def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         'unanimous': votes == num,
         'any1': votes >= 1,
     }
+
+
+def ensemble_tpr_on_known_ai(
+    inputs: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+    primary: tuple[str, ...] = PRIMARY,
+    min_votes: int = 2,
+    model: str | None = None,
+) -> dict[str, float]:
+    """Return each outlet's ensemble TPR on the known-AI set.
+
+        Compare each outlet to itself.
+
+    Args:
+        inputs (pd.DataFrame): The score-input table.
+        scores (dict[str, pd.Series]): {detector: id->score}.
+        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
+        false_positive_rate (float): FPR target the thresholds were set at.
+        primary (tuple[str, ...]): Ensemble members.
+        min_votes (int): Votes required to flag.
+        model (str | None): Restrict to one generator.
+
+    Returns:
+        dict[str, float]: {outlet: TPR}.
+
+    """
+    ai = inputs[inputs.group == 'ai']
+    if model is not None:
+        ai = ai[ai.model == model]
+    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
+    output: dict[str, float] = {}
+    for outlet in OUTLETS:
+        votes = np.zeros(len(ai), dtype=int)
+        for detector in primary:
+            threshold = threshold_fpr_df[
+                (threshold_fpr_df.detector == detector)
+                & (threshold_fpr_df.outlet == outlet)
+            ]
+            threshold_value = float(threshold['threshold'].iloc[0])
+            scoring = ai['id'].map(scores[detector]).to_numpy(dtype=float)
+            votes += (np.isfinite(scoring) & (scoring >= threshold_value)).astype(int)
+        output[outlet] = float((votes >= min_votes).mean())
+    return output
 
 
 def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
@@ -294,7 +369,7 @@ def ensemble_fpr_on_anchor(
         min_votes (int): Votes required to flag (2 = majority of 3, 1 = any-1).
 
     Returns:
-        dict[str, float]: ``{outlet: realised ensemble FPR}``.
+        dict[str, float]: {outlet: realised ensemble FPR}.
 
     """
     human = inputs[inputs.group == 'human']
@@ -498,10 +573,8 @@ def main() -> int:
     ]
     if missing:
         logger.error(
-            'Detector score files missing: %s. Run `python -m detect.score` '
-            'then re-run. Error: %s',
+            'Detector score files missing: %s. Run `python -m detect.score` then re-run',
             ', '.join(missing),
-            sys.stderr,
         )
         return 1
     inputs = pd.read_csv(INPUTS, dtype=str).fillna('')
@@ -518,6 +591,7 @@ def main() -> int:
         binary.to_csv(DETECTION_DIR / f'detection_scores_{tag}.csv', index=False)
         headlines = headline_table(binary, 'ensemble_majority')
         headlines.to_csv(DETECTION_DIR / f'headline_{tag}.csv', index=False)
+
         anchor_fpr = ensemble_fpr_on_anchor(
             inputs,
             scores,
@@ -526,11 +600,24 @@ def main() -> int:
             primary=PRIMARY,
             min_votes=len(PRIMARY) // 2 + 1,
         )
+        ens_tpr = ensemble_tpr_on_known_ai(
+            inputs,
+            scores,
+            threshold_df,
+            false_positive_rate,
+            primary=PRIMARY,
+            min_votes=len(PRIMARY) // 2 + 1,
+        )
+
+        adjusted_table(headlines, anchor_fpr, ens_tpr).to_csv(
+            DETECTION_DIR / f'headline_adjusted_{tag}.csv', index=False
+        )
         sanity_pre_fpr(headlines, anchor_fpr, false_positive_rate).to_csv(
             DETECTION_DIR / f'sanity_pre_fpr_{tag}.csv', index=False
         )
     logger.info(
-        'wrote calibration_report, detection_scores, headline, sanity to %s',
+        'wrote calibration_report, detection_scores, headline, headline adjusted,'
+        ' sanity to %s',
         DETECTION_DIR,
     )
     return 0
