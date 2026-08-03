@@ -194,15 +194,9 @@ def _binary_calls(
         pd.DataFrame: Dataframe with binary results for each detector.
 
     """
-    calls: dict[str, np.ndarray] = {}
-    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
-    for detector in ALL_DETECTORS:
-        lut = threshold_fpr_df[threshold_fpr_df.detector == detector].set_index('outlet')[
-            'threshold'
-        ]
-        article_thr = corpus['outlet'].map(lut).to_numpy(dtype=float)
-        article_score = corpus['id'].map(scores[detector]).to_numpy(dtype=float)
-        calls[detector] = np.isfinite(article_score) & (article_score >= article_thr)
+    calls = _detector_calls(
+        corpus, scores, threshold_df, false_positive_rate, ALL_DETECTORS
+    )
     ensemble = ensemble_calls({detector: calls[detector] for detector in PRIMARY})
     output = corpus[['id', 'outlet', 'period', 'is_wire', 'word_count']].copy()
     for detector in ALL_DETECTORS:
@@ -210,6 +204,44 @@ def _binary_calls(
     for name, arr in ensemble.items():
         output[f'ensemble_{name}'] = arr
     return output
+
+
+def _detector_calls(
+    frame: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+    detectors: tuple[str, ...],
+    outlet: str | None = None,
+) -> dict[str, np.ndarray]:
+    """Return {detector: bool array} for frame at one FPR target.
+
+    Args:
+        frame (pd.DataFrame): Rows with id.
+        scores (dict[str, pd.Series]): {detector: id->score}.
+        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
+        false_positive_rate (float): FPR target of the thresholds.
+        detectors (tuple[str, ...]): Which detectors to evaluate.
+        outlet (str | None): Which outlet's thresholds to use.
+
+    Returns:
+        dict[str, np.ndarray]: Boolean call array per detector.
+
+    """
+    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
+    calls: dict[str, np.ndarray] = {}
+    for detector in detectors:
+        lut = threshold_fpr_df[threshold_fpr_df.detector == detector].set_index('outlet')[
+            'threshold'
+        ]
+        row_threshold = (
+            np.full(len(frame), float(lut[outlet]))
+            if outlet is not None
+            else frame['outlet'].map(lut).to_numpy(dtype=float)
+        )
+        row_scores = frame['id'].map(scores[detector]).to_numpy(dtype=float)
+        calls[detector] = np.isfinite(row_scores) & (row_scores >= row_threshold)
+    return calls
 
 
 def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -231,51 +263,6 @@ def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         'unanimous': votes == num,
         'any1': votes >= 1,
     }
-
-
-def ensemble_tpr_on_known_ai(
-    inputs: pd.DataFrame,
-    scores: dict[str, pd.Series],
-    threshold_df: pd.DataFrame,
-    false_positive_rate: float,
-    primary: tuple[str, ...] = PRIMARY,
-    min_votes: int = 2,
-    model: str | None = None,
-) -> dict[str, float]:
-    """Return each outlet's ensemble TPR on the known-AI set.
-
-        Compare each outlet to itself.
-
-    Args:
-        inputs (pd.DataFrame): The score-input table.
-        scores (dict[str, pd.Series]): {detector: id->score}.
-        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
-        false_positive_rate (float): FPR target the thresholds were set at.
-        primary (tuple[str, ...]): Ensemble members.
-        min_votes (int): Votes required to flag.
-        model (str | None): Restrict to one generator.
-
-    Returns:
-        dict[str, float]: {outlet: TPR}.
-
-    """
-    ai = inputs[inputs.group == 'ai']
-    if model is not None:
-        ai = ai[ai.model == model]
-    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
-    output: dict[str, float] = {}
-    for outlet in OUTLETS:
-        votes = np.zeros(len(ai), dtype=int)
-        for detector in primary:
-            threshold = threshold_fpr_df[
-                (threshold_fpr_df.detector == detector)
-                & (threshold_fpr_df.outlet == outlet)
-            ]
-            threshold_value = float(threshold['threshold'].iloc[0])
-            scoring = ai['id'].map(scores[detector]).to_numpy(dtype=float)
-            votes += (np.isfinite(scoring) & (scoring >= threshold_value)).astype(int)
-        output[outlet] = float((votes >= min_votes).mean())
-    return output
 
 
 def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
@@ -350,6 +337,41 @@ def lower_bound(
 
 
 # ---------- FALSE POSITIVE RATE CALCULATIONS ----------
+def _ensemble_rate(
+    frame: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+    primary: tuple[str, ...],
+    min_votes: int,
+    per_outlet_rows: bool = False,
+) -> dict[str, float]:
+    """Return {outlet: rate} at which the ensemble rule fires on frame.
+
+    Args:
+        frame (pd.DataFrame): Rows to evaluate .
+        scores (dict[str, pd.Series]): {detector: id->score}.
+        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
+        false_positive_rate (float): FPR target of the thresholds.
+        primary (tuple[str, ...]): Ensemble members.
+        min_votes (int): Votes required to flag.
+        per_outlet_rows (bool): True or false based on evaluation.
+
+    Returns:
+        dict[str, float]: {outlet: firing rate}.
+
+    """
+    output: dict[str, float] = {}
+    for outlet in OUTLETS:
+        rows = frame[frame.outlet == outlet] if per_outlet_rows else frame
+        calls = _detector_calls(
+            rows, scores, threshold_df, false_positive_rate, primary, outlet=outlet
+        )
+        votes = sum(call.astype(int) for call in calls.values())
+        output[outlet] = float((votes >= min_votes).mean())
+    return output
+
+
 def ensemble_fpr_on_anchor(
     inputs: pd.DataFrame,
     scores: dict[str, pd.Series],
@@ -373,21 +395,49 @@ def ensemble_fpr_on_anchor(
 
     """
     human = inputs[inputs.group == 'human']
-    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
-    output: dict[str, float] = {}
-    for outlet in OUTLETS:
-        ids = human[human.outlet == outlet]['id']
-        votes = np.zeros(len(ids), dtype=int)
-        for detector in primary:
-            threshold = threshold_fpr_df[
-                (threshold_fpr_df.detector == detector)
-                & (threshold_fpr_df.outlet == outlet)
-            ]
-            threshold_value = float(threshold['threshold'].iloc[0])
-            scoring = ids.map(scores[detector]).to_numpy(dtype=float)
-            votes += (np.isfinite(scoring) & (scoring >= threshold_value)).astype(int)
-        output[outlet] = float((votes >= min_votes).mean())
-    return output
+    return _ensemble_rate(
+        human,
+        scores,
+        threshold_df,
+        false_positive_rate,
+        primary,
+        min_votes,
+        per_outlet_rows=True,
+    )
+
+
+def ensemble_tpr_on_known_ai(
+    inputs: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+    primary: tuple[str, ...] = PRIMARY,
+    min_votes: int = 2,
+    model: str | None = None,
+) -> dict[str, float]:
+    """Return each outlet's ensemble TPR on the known-AI set.
+
+        Compare each outlet to itself.
+
+    Args:
+        inputs (pd.DataFrame): The score-input table.
+        scores (dict[str, pd.Series]): {detector: id->score}.
+        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
+        false_positive_rate (float): FPR target of the thresholds.
+        primary (tuple[str, ...]): Ensemble members.
+        min_votes (int): Votes required to flag.
+        model (str | None): Restrict to one generator.
+
+    Returns:
+        dict[str, float]: {outlet: TPR}.
+
+    """
+    ai = inputs[inputs.group == 'ai']
+    if model is not None:
+        ai = ai[ai.model == model]
+    return _ensemble_rate(
+        ai, scores, threshold_df, false_positive_rate, primary, min_votes
+    )
 
 
 def sanity_pre_fpr(
