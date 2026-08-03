@@ -232,28 +232,75 @@ def positive_rate(scores: np.ndarray, threshold: float) -> float:
     return float(np.mean(scoring >= threshold))
 
 
-def sanity_pre_fpr(headline: pd.DataFrame, false_positive_rate: float) -> pd.DataFrame:
+def ensemble_fpr_on_anchor(
+    inputs: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+    primary: tuple[str, ...] = PRIMARY,
+    min_votes: int = 2,
+) -> dict[str, float]:
+    """Return each outlet's realised ensemble FPR on the human anchor.
+
+    Args:
+        inputs (pd.DataFrame): The score-input table (needs group/outlet).
+        scores (dict[str, pd.Series]): {detector: id->score}.
+        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
+        false_positive_rate (float): The per-detector FPR target the thresholds were set at.
+        primary (tuple[str, ...]): Ensemble members.
+        min_votes (int): Votes required to flag (2 = majority of 3, 1 = any-1).
+
+    Returns:
+        dict[str, float]: ``{outlet: realised ensemble FPR}``.
+
+    """
+    human = inputs[inputs.group == 'human']
+    threshold_fpr_df = threshold_df[threshold_df.fpr_target == false_positive_rate]
+    output: dict[str, float] = {}
+    for outlet in OUTLETS:
+        ids = human[human.outlet == outlet]['id']
+        votes = np.zeros(len(ids), dtype=int)
+        for detector in primary:
+            threshold = threshold_fpr_df[
+                (threshold_fpr_df.detector == detector)
+                & (threshold_fpr_df.outlet == outlet)
+            ]
+            threshold_value = float(threshold['threshold'].iloc[0])
+            scoring = ids.map(scores[detector]).to_numpy(dtype=float)
+            votes += (np.isfinite(scoring) & (scoring >= threshold_value)).astype(int)
+        output[outlet] = float((votes >= min_votes).mean())
+    return output
+
+
+def sanity_pre_fpr(
+    headline: pd.DataFrame, ensemble_fpr: dict[str, float], false_positive_rate: float
+) -> pd.DataFrame:
     """Compare each outlet's PRE-cell detected rate to the target FPR.
 
     Args:
         headline (pd.DataFrame): Headlines df.
+        ensemble_fpr (dict[str, float]): The ensemble FPR per outlet.
         false_positive_rate (float): The target FPR for comparison.
 
     Returns:
         pd.DataFrame: False Positive sanity check table.
 
     """
-    pre_df = headline[(headline.period == 'pre') & (headline.view == 'all')]
-    rows = [
-        {
-            'outlet': row.outlet,
-            'pre_detected': row.detected,
-            'fpr_target': false_positive_rate,
-            'delta': row.detected - false_positive_rate,
-        }
-        for row in pre_df.itertuples()
-    ]
-    return pd.DataFrame(rows)
+    pre = headline[(headline.period == 'pre') & (headline.view == 'all')]
+    return pd.DataFrame(
+        [
+            {
+                'outlet': r.outlet,
+                'pre_detected': r.detected,
+                'ensemble_fpr_anchor': ensemble_fpr.get(r.outlet, float('nan')),
+                'delta': r.detected - ensemble_fpr.get(r.outlet, float('nan')),
+                'fpr_target': false_positive_rate,
+                'delta_asposted': r.detected
+                - false_positive_rate,  # superseded, kept for the report
+            }
+            for r in pre.itertuples()
+        ]
+    )
 
 
 def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
@@ -443,7 +490,23 @@ def main() -> int:
         binary.to_csv(DETECTION_DIR / f'detection_scores_{tag}.csv', index=False)
         headlines = headline_table(binary, 'ensemble_majority')
         headlines.to_csv(DETECTION_DIR / f'headline_{tag}.csv', index=False)
-        sanity_pre_fpr(headlines, false_positive_rate).to_csv(
+        anchor_fpr = ensemble_fpr_on_anchor(
+            inputs,
+            scores,
+            threshold_df,
+            false_positive_rate,
+            primary=PRIMARY,
+            min_votes=len(PRIMARY) // 2 + 1,
+        )
+        sanity_pre_fpr(headlines, anchor_fpr, false_positive_rate).to_csv(
             DETECTION_DIR / f'sanity_pre_fpr_{tag}.csv', index=False
         )
+    logger.info(
+        'wrote calibration_report, detection_scores, headline, sanity to %s',
+        DETECTION_DIR,
+    )
     return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
