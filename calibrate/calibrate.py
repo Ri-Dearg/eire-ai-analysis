@@ -142,25 +142,6 @@ def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
 
 
 # ---------- THRESHOLD CHECKS ----------
-def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    """Combine per-detector binary calls.
-
-    Args:
-        calls (dict[str, np.ndarray]): Detector bool for the primary detectors.
-
-    Returns:
-        dict[str, np.ndarray]: majority (>=2), unanimous (all),
-            any1 (>=1) boolean arrays.
-
-    """
-    stack = np.vstack([calls[detector].astype(int) for detector in PRIMARY])
-    votes = stack.sum(axis=0)
-    num = len(PRIMARY)
-    return {
-        'majority': votes >= num // 2 + 1,
-        'unanimous': votes == num,
-        'any1': votes >= 1,
-    }
 
 
 def _binary_calls(
@@ -199,6 +180,27 @@ def _binary_calls(
     for name, arr in ensemble.items():
         output[f'ensemble_{name}'] = arr
     return output
+
+
+def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Combine per-detector binary calls.
+
+    Args:
+        calls (dict[str, np.ndarray]): Detector bool for the primary detectors.
+
+    Returns:
+        dict[str, np.ndarray]: majority (>=2), unanimous (all),
+            any1 (>=1) boolean arrays.
+
+    """
+    stack = np.vstack([calls[detector].astype(int) for detector in PRIMARY])
+    votes = stack.sum(axis=0)
+    num = len(PRIMARY)
+    return {
+        'majority': votes >= num // 2 + 1,
+        'unanimous': votes == num,
+        'any1': votes >= 1,
+    }
 
 
 def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
@@ -251,6 +253,25 @@ def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
             )
 
     return pd.DataFrame(records)
+
+
+def lower_bound(
+    observed_positive: float, false_positive_rate: float, true_positive_rate: float
+) -> float:
+    """Sensitivity-adjusted AI-share floor, clipped to >=0.
+
+    Args:
+        observed_positive (float): Observed corpus positive rate.
+        false_positive_rate (float): Realised false-positive rate of the same decision rule.
+        true_positive_rate (float): Measured true-positive rate (sensitivity) of that rule.
+
+    Returns:
+        float: Estimated lower-bound AI share (nan if tpr <= 0).
+
+    """
+    if not true_positive_rate or np.isnan(true_positive_rate):
+        return float('nan')
+    return max(0.0, (observed_positive - false_positive_rate) / true_positive_rate)
 
 
 # ---------- FALSE POSITIVE RATE CALCULATIONS ----------
