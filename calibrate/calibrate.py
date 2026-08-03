@@ -232,6 +232,30 @@ def positive_rate(scores: np.ndarray, threshold: float) -> float:
     return float(np.mean(scoring >= threshold))
 
 
+def sanity_pre_fpr(headline: pd.DataFrame, false_positive_rate: float) -> pd.DataFrame:
+    """Compare each outlet's PRE-cell detected rate to the target FPR.
+
+    Args:
+        headline (pd.DataFrame): Headlines df.
+        false_positive_rate (float): The target FPR for comparison.
+
+    Returns:
+        pd.DataFrame: False Positive sanity check table.
+
+    """
+    pre_df = headline[(headline.period == 'pre') & (headline.view == 'all')]
+    rows = [
+        {
+            'outlet': row.outlet,
+            'pre_detected': row.detected,
+            'fpr_target': false_positive_rate,
+            'delta': row.detected - false_positive_rate,
+        }
+        for row in pre_df.itertuples()
+    ]
+    return pd.DataFrame(rows)
+
+
 def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
     """Return the score threshold giving false-positive rate on humans.
 
@@ -417,5 +441,9 @@ def main() -> int:
         binary = _binary_calls(corpus, scores, threshold_df, false_positive_rate)
         tag = f'fpr{int(false_positive_rate * 100)}'
         binary.to_csv(DETECTION_DIR / f'detection_scores_{tag}.csv', index=False)
-        head = headline_table(binary, 'ensemble_majority')
+        headlines = headline_table(binary, 'ensemble_majority')
+        headlines.to_csv(DETECTION_DIR / f'headline_{tag}.csv', index=False)
+        sanity_pre_fpr(headlines, false_positive_rate).to_csv(
+            DETECTION_DIR / f'sanity_pre_fpr_{tag}.csv', index=False
+        )
     return 0
