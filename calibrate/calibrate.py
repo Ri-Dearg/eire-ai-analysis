@@ -32,6 +32,15 @@ OUTLETS = ('rte', 'irish_examiner', 'the_liberal', 'gript')
 PRIMARY = ('binoculars', 'fastdetectgpt', 'perplexity')
 ALL_DETECTORS = (*PRIMARY, 'radar')
 
+# SUggested by AI for better comparisons
+RULES: dict[str, tuple[tuple[str, ...], int]] = {
+    'maj_bino_fdg_radar': (('binoculars', 'fastdetectgpt', 'radar'), 2),
+    'maj_bino_fdg_perp': (('binoculars', 'fastdetectgpt', 'perplexity'), 2),
+    'any1_bino_fdg_perp': (('binoculars', 'fastdetectgpt', 'perplexity'), 1),
+    'perplexity_only': (('perplexity',), 1),
+    'fastdetectgpt_only': (('fastdetectgpt',), 1),
+}
+
 
 # ---------- FILTERING ----------
 def _human_usable_row(row: pd.Series, seen: set[str]) -> bool:  # noqa: PLR0911
@@ -263,6 +272,32 @@ def ensemble_calls(calls: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         'unanimous': votes == num,
         'any1': votes >= 1,
     }
+
+
+def rule_calls(
+    frame: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    threshold_df: pd.DataFrame,
+    false_positive_rate: float,
+    primary: tuple[str, ...],
+    min_votes: int,
+) -> np.ndarray:
+    """Return the boolean call array for one decision rule.
+
+    Args:
+        frame (pd.DataFrame): Rows with id and outlet.
+        scores (dict[str, pd.Series]): {detector: id->score}.
+        threshold_df (pd.DataFrame): Output of :func:`calibrate`.
+        false_positive_rate (float): FPR target.
+        primary (tuple[str, ...]): Ensemble members.
+        min_votes (int): Votes required to flag.
+
+    Returns:
+        np.ndarray: Boolean array aligned to frame.
+
+    """
+    calls = _detector_calls(frame, scores, threshold_df, false_positive_rate, primary)
+    return sum(call.astype(int) for call in calls.values()) >= min_votes
 
 
 def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
