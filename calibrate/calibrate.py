@@ -23,7 +23,7 @@ KNOWN_AI = CALIBRATION_DIR / 'known_ai.csv'
 INPUTS = DETECTION_DIR / 'score_inputs.csv'
 
 MIN_HUMAN_CHARS = 400
-
+LENGTH_BANDS = ((0, 150), (150, 300), (300, 10**9))
 FALSE_POSITIVE_TARGETS = (0.01, 0.05)
 
 
@@ -145,6 +145,74 @@ def _binary_calls(
     for name, arr in ensemble.items():
         output[f'ensemble_{name}'] = arr
     return output
+
+
+def _length_band(words: int) -> str:
+    """Return the length-band label for a word count.
+
+    Args:
+        words (int): Number of words.
+
+    Returns:
+        str: Either string of length, or na.
+
+    """
+    for low, high in LENGTH_BANDS:
+        if low <= words < high:
+            return f'{low}-{high if high < 10**9 else "inf"}'
+    return 'na'
+
+
+def headline_table(calls: pd.DataFrame, call_col: str) -> pd.DataFrame:
+    """Detected-rate per outlet x period: all / non-wire / by length band.
+
+    Args:
+        calls (pd.DataFrame): Per-article calls from :func:`_binary_calls`.
+        call_col (str): Which call column to summarise.
+
+    Returns:
+        pd.DataFrame: Long-format detected rows.
+
+    """
+    df = calls.copy()
+    df['word_count'] = df['word_count'].astype(int)
+    df['band'] = df['word_count'].map(_length_band)
+    df['wire'] = df['is_wire'].astype(str) == '1'
+    records: list[dict] = []
+
+    for (outlet, period), group in df.groupby(['outlet', 'period']):
+        records.append(
+            {
+                'outlet': outlet,
+                'period': period,
+                'view': 'all',
+                'n': len(group),
+                'detected': float(group[call_col].mean()),
+            }
+        )
+
+        num_wire = group[~group.wire]
+        records.append(
+            {
+                'outlet': outlet,
+                'period': period,
+                'view': 'non_wire',
+                'n': len(num_wire),
+                'detected': float(num_wire[call_col].mean()) if len(num_wire) else np.nan,
+            }
+        )
+        for band, group_band in group.groupby('band'):
+            records.append(
+                {
+                    'outlet': outlet,
+                    'period': period,
+                    'view': f'len_{band}',
+                    'n': len(group_band),
+                    'detected': float(group_band[call_col].mean()),
+                }
+            )
+
+    return pd.DataFrame(records)
 
 
 def positive_rate(scores: np.ndarray, threshold: float) -> float:
@@ -346,6 +414,8 @@ def main() -> int:
     corpus = inputs[inputs.group == 'corpus'].copy()
 
     for false_positive_rate in FALSE_POSITIVE_TARGETS:
-        binnary = _binary_calls(corpus, scores, threshold_df, false_positive_rate)
-
+        binary = _binary_calls(corpus, scores, threshold_df, false_positive_rate)
+        tag = f'fpr{int(false_positive_rate * 100)}'
+        binary.to_csv(DETECTION_DIR / f'detection_scores_{tag}.csv', index=False)
+        head = headline_table(binary, 'ensemble_majority')
     return 0
