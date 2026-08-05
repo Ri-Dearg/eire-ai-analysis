@@ -416,6 +416,9 @@ def main() -> None:
         verify(int(args[1]) if len(args) > 1 else VERIFY_DEFAULT)
         return
     if args and args[0] == '--purge':
+        if '--yes-really' not in args:
+            print('purge_gript() would delete every Gript row. Re-run with --yes-really.')
+            return
         print(f'purged {purge_gript()} gript rows')
         return
     urls = _read_sample(GRIPT_SLUG, DATA_DIR)
