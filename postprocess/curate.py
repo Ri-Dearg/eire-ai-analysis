@@ -30,6 +30,8 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from .parse import TODAY
+
 logger = logging.getLogger(__name__)
 
 # ---------- DIRECTORIES ----------
@@ -298,6 +300,14 @@ def main() -> int:
         row['year'] = (row['published_date'] or '')[:4]
         row['month'] = (row['published_date'] or '')[:7]
     label_drops(rows)
+    n_hi = sum(r['period_fine'] == 'out_hi' for r in rows)
+    if n_hi:
+        logger.warning(
+            '%d rows dated after the TODAY snapshot (%s) were dropped '
+            '-- advance TODAY or accept the boundary',
+            n_hi,
+            TODAY,
+        )
     _write_index(rows)
 
     logger.info('drop reasons: %s', dict(Counter(row['drop_reason'] for row in rows)))
