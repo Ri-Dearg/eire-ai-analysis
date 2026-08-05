@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 import random
 import re
 from collections import defaultdict
@@ -25,6 +26,14 @@ DATA_DIR = Path('./data')
 # No of articles to sample from each period.
 PRE_GPT_NO = 0
 POST_GPT_NO = 2500
+
+
+if PRE_GPT_NO and not os.environ.get('SAMPLE_ALLOW_PRE'):
+    MESSAGE = (
+        'PRE_GPT_NO > 0 will change the calibration anchor draw. '
+        'Set SAMPLE_ALLOW_PRE=1 if that is intended.'
+    )
+    raise SystemExit(MESSAGE)
 
 # Select years for sampling.
 # (Gript starts 2019).
