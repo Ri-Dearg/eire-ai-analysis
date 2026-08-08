@@ -18,7 +18,9 @@ CALIBRATION_REPORT = DETECTION_DIR / 'calibration_report.csv'
 PRIMARY_EFFECTS = DETECTION_DIR / 'primary_effects.csv'
 BAND_SENSITIVITY = DETECTION_DIR / 'tpr_by_band.csv'
 
+PRIMARY_DETECTOR = 'fastdetectgpt'
 REPORTED_DETECTORS = ('fastdetectgpt', 'binoculars', 'perplexity')
+PRIMARY_PERIOD = 'post'
 REPORTED_PERIODS = ('post', 'pre')
 
 CONTROL_CATEGORY = 'legacy'
@@ -26,7 +28,9 @@ TREATMENT_CATEGORY = 'counter-consensus'
 
 # ---------- SETTINGS ----------
 SEED = 37
+# Settings aided by AI
 BOOTSTRAP_RESAMPLES = 10_000
+MATERIALITY_THRESHOLD = 0.15
 
 
 # ---------- EFFECT SIZE ----------
@@ -104,6 +108,54 @@ def mannwhitney_p(treatment_scores: np.ndarray, control_scores: np.ndarray) -> f
         return float('nan')
     _unused, probability = mannwhitneyu(treatment, control, alternative='two-sided')
     return float(probability)
+
+
+def contrast(
+    frame: pd.DataFrame,
+    scope: str,
+    score_column: str,
+    detector: str,
+    period: str,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+) -> dict:
+    """Return one contrast record for a subset of the period cell.
+
+    Args:
+        frame (pd.DataFrame): Rows to contrast.
+        scope (str): Label for the subset.
+        score_column (str): Name of the score column to use.
+        detector (str): The detector being analyzed.
+        period (str): The period being analyzed.
+        resamples (int): The number of bootstrap resamples.
+
+    Returns:
+        dict: One output row.
+
+    """
+    treatment = frame.loc[frame['category'] == TREATMENT_CATEGORY, score_column].to_numpy(
+        dtype=float
+    )
+    control = frame.loc[frame['category'] == CONTROL_CATEGORY, score_column].to_numpy(
+        dtype=float
+    )
+    delta, ci_low, ci_high = delta_ci(treatment, control, resamples=resamples)
+    return {
+        'detector': detector,
+        'period': period,
+        'scope': scope,
+        'n_treatment': int(np.isfinite(treatment).sum()),
+        'n_control': int(np.isfinite(control).sum()),
+        'delta': delta,
+        'ci_low': ci_low,
+        'ci_high': ci_high,
+        'p_value': mannwhitney_p(treatment, control),
+        'material': bool(abs(delta) >= MATERIALITY_THRESHOLD)
+        if np.isfinite(delta)
+        else False,
+        'is_primary': detector == PRIMARY_DETECTOR
+        and period == PRIMARY_PERIOD
+        and scope == 'all',
+    }
 
 
 def main() -> int:
