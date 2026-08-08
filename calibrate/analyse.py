@@ -14,6 +14,8 @@ from calibrate.calibrate import (
     FALSE_POSITIVE_TARGETS,
     KNOWN_AI,
     LENGTH_BANDS,
+    PRIMARY,
+    _load_scores,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,66 @@ def band_label(word_count: int, bands: Sequence[tuple[int, int]] = LENGTH_BANDS)
         if low <= word_count < high:
             return f'{low}-{high if high < 10**9 else "inf"}'
     return 'na'
+
+
+# ---------- BAND-WISE SENSITIVITY ----------
+def tpr_by_band(
+    reference: pd.DataFrame,
+    scores: dict[str, pd.Series],
+    thresholds: pd.DataFrame,
+    detectors: Sequence[str],
+    outlets: Sequence[str],
+    false_positive_targets: Sequence[float],
+    min_band_articles: int = MIN_BAND_ARTICLES,
+) -> pd.DataFrame:
+    """Return true-positive rate per detector, outlet, FPR target and length band.
+
+    Args:
+        reference (pd.DataFrame): Known-AI rows.
+        scores (dict[str, pd.Series]): ``{detector: id -> score}``.
+        thresholds (pd.DataFrame): Output of ``calibrate.calibrate``.
+        detectors (Sequence[str]): Detector names.
+        outlets (Sequence[str]): Outlet slugs.
+        false_positive_targets (Sequence[float]): Target false-positive rates.
+        min_band_articles (int): Floor below which a band is not estimable.
+
+    Returns:
+        pd.DataFrame: One row per (detector, outlet, fpr_target, band).
+
+    """
+    reference = reference.copy()
+    reference['band'] = reference['word_count'].astype(int).map(band_label)
+    records: list[dict] = []
+    for detector in detectors:
+        reference_scores = reference['id'].map(scores[detector]).to_numpy(dtype=float)
+        for outlet in outlets:
+            for false_positive_rate in false_positive_targets:
+                match = thresholds[
+                    (thresholds.detector == detector)
+                    & (thresholds.outlet == outlet)
+                    & (thresholds.fpr_target == false_positive_rate)
+                ]
+                threshold = float(match['threshold'].iloc[0])
+                for band in reference['band'].unique():
+                    in_band = (reference['band'] == band).to_numpy() & np.isfinite(
+                        reference_scores
+                    )
+                    article_count = int(in_band.sum())
+                    estimable = article_count >= min_band_articles
+                    records.append(
+                        {
+                            'detector': detector,
+                            'outlet': outlet,
+                            'fpr_target': false_positive_rate,
+                            'band': band,
+                            'n_reference': article_count,
+                            'estimable': estimable,
+                            'tpr': float(np.mean(reference_scores[in_band] >= threshold))
+                            if estimable
+                            else float('nan'),
+                        }
+                    )
+    return pd.DataFrame(records)
 
 
 # ---------- EFFECT SIZE ----------
@@ -296,7 +358,13 @@ def main() -> int:
     records: list[dict] = []
     for detector in REPORTED_DETECTORS:
         for period in REPORTED_PERIODS:
-            print(corpus, detector, period)
+            records.extend(category_contrast(corpus, detector, period))
     effects = pd.DataFrame(records)
     effects.to_csv(PRIMARY_EFFECTS, index=False)
+
+    reference = pd.read_csv(KNOWN_AI, usecols=['id', 'n_words'])
+    reference = reference.rename(columns={'n_words': 'word_count'})
+    reference['id'] = 'ai:' + reference['id'].astype(str)
+    scores = {detector: _load_scores(detector) for detector in PRIMARY}
+    thresholds = pd.read_csv(CALIBRATION_REPORT)
     return 0
