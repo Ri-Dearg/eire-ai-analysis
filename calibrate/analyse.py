@@ -8,7 +8,13 @@ import numpy as np
 import pandas as pd
 from scipy.stats import mannwhitneyu
 
-from calibrate.calibrate import DATA, DETECTION_DIR, FALSE_POSITIVE_TARGETS, KNOWN_AI
+from calibrate.calibrate import (
+    DATA,
+    DETECTION_DIR,
+    FALSE_POSITIVE_TARGETS,
+    KNOWN_AI,
+    LENGTH_BANDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +37,24 @@ SEED = 37
 # Settings aided by AI
 BOOTSTRAP_RESAMPLES = 10_000
 MATERIALITY_THRESHOLD = 0.15
+
+
+# ---------- LENGTH BANDS ----------
+def band_label(word_count: int, bands: Sequence[tuple[int, int]] = LENGTH_BANDS) -> str:
+    """Return the length-band label for a word count.
+
+    Args:
+        word_count (int): Article word count.
+        bands (Sequence[tuple[int, int]]): ``[low, high)``.
+
+    Returns:
+        str: Label such as ``'0-150'`` or ``'300-inf'``; ``'na'`` if unmatched.
+
+    """
+    for low, high in bands:
+        if low <= word_count < high:
+            return f'{low}-{high if high < 10**9 else "inf"}'
+    return 'na'
 
 
 # ---------- EFFECT SIZE ----------
@@ -136,6 +160,14 @@ def category_contrast(
     logger.info('%s / %s: overall contrast (n=%d)', detector, period, len(cell))
     records.append(contrast(cell, 'all', score_column, detector, period, resamples))
     print(records)
+
+    for low, high in LENGTH_BANDS:
+        band = band_label(low)
+        in_band = cell[(cell['word_count'] >= low) & (cell['word_count'] < high)]
+        logger.info('%s / %s: band %s (n=%d)', detector, period, band, len(in_band))
+        records.append(
+            contrast(in_band, f'band_{band}', score_column, detector, period, resamples)
+        )
 
 
 def contrast(
