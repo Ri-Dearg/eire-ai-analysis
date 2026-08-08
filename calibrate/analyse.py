@@ -24,6 +24,10 @@ REPORTED_PERIODS = ('post', 'pre')
 CONTROL_CATEGORY = 'legacy'
 TREATMENT_CATEGORY = 'counter-consensus'
 
+# ---------- SETTINGS ----------
+SEED = 37
+BOOTSTRAP_RESAMPLES = 10_000
+
 
 # ---------- EFFECT SIZE ----------
 def cliffs_delta(treatment_scores: np.ndarray, control_scores: np.ndarray) -> float:
@@ -43,6 +47,44 @@ def cliffs_delta(treatment_scores: np.ndarray, control_scores: np.ndarray) -> fl
         return float('nan')
     statistic, _unused = mannwhitneyu(treatment, control, alternative='two-sided')
     return float(2.0 * statistic / (treatment.size * control.size) - 1.0)
+
+
+# Calculation Logic aided by AI
+def delta_ci(
+    treatment_scores: np.ndarray,
+    control_scores: np.ndarray,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+    seed: int = SEED,
+    alpha: float = 0.05,
+) -> tuple[float, float, float]:
+    """Return Cliff's delta with a percentile bootstrap confidence interval.
+
+    Args:
+        treatment_scores (np.ndarray): First group's detector scores.
+        control_scores (np.ndarray): Second group's detector scores.
+        resamples (int): Bootstrap resamples; the specification fixes 10,000.
+        seed (int): RNG seed for a reproducible interval.
+        alpha (float): Two-sided error rate; 0.05 gives a 95% interval.
+
+    Returns:
+        tuple[float, float, float]: ``(delta, ci_low, ci_high)``.
+
+    """
+    treatment = treatment_scores[np.isfinite(treatment_scores)]
+    control = control_scores[np.isfinite(control_scores)]
+    point_estimate = cliffs_delta(treatment, control)
+    if not np.isfinite(point_estimate):
+        return point_estimate, float('nan'), float('nan')
+    seeded_rng = np.random.default_rng(seed)
+    resampled_deltas = np.empty(resamples, dtype=float)
+    for index in range(resamples):
+        treatment_sample = treatment[
+            seeded_rng.integers(0, treatment.size, treatment.size)
+        ]
+        control_sample = control[seeded_rng.integers(0, control.size, control.size)]
+        resampled_deltas[index] = cliffs_delta(treatment_sample, control_sample)
+    ci_low, ci_high = np.quantile(resampled_deltas, [alpha / 2, 1 - alpha / 2])
+    return point_estimate, float(ci_low), float(ci_high)
 
 
 def mannwhitney_p(treatment_scores: np.ndarray, control_scores: np.ndarray) -> float:
