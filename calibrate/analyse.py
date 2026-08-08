@@ -1,9 +1,15 @@
-"""Effect sizes and band-wise sensitivity for the pre-specified analysis."""
+"""Effect sizes and band-wise sensitivity for the pre-specified analysis.
+
+Produces Cliff's delta with a bootstrap interval and a
+Mann-Whitney p-value, and a true-positive rate per length band, which the
+co-primary needs because it compares detected rates band by band.
+"""
 
 from __future__ import annotations
 
 import logging
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -19,6 +25,9 @@ from calibrate.calibrate import (
     PRIMARY,
     _load_scores,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +50,10 @@ SEED = 37
 # Settings aided by AI
 BOOTSTRAP_RESAMPLES = 10_000
 MATERIALITY_THRESHOLD = 0.15
+
+# Below this many reference articles a band's true-positive rate is reported as
+# not estimable rather than as a number.
+MIN_BAND_ARTICLES = 30
 
 
 # ---------- LENGTH BANDS ----------
@@ -223,7 +236,6 @@ def category_contrast(
     records: list[dict] = []
     logger.info('%s / %s: overall contrast (n=%d)', detector, period, len(cell))
     records.append(contrast(cell, 'all', score_column, detector, period, resamples))
-    print(records)
 
     for low, high in LENGTH_BANDS:
         band = band_label(low)
