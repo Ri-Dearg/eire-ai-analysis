@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import pandas as pd
+from scipy.stats import mannwhitneyu
 
 from calibrate.calibrate import DATA, DETECTION_DIR, FALSE_POSITIVE_TARGETS, KNOWN_AI
 
@@ -18,6 +20,28 @@ BAND_SENSITIVITY = DETECTION_DIR / 'tpr_by_band.csv'
 
 REPORTED_DETECTORS = ('fastdetectgpt', 'binoculars', 'perplexity')
 REPORTED_PERIODS = ('post', 'pre')
+
+CONTROL_CATEGORY = 'legacy'
+TREATMENT_CATEGORY = 'counter-consensus'
+
+
+def mannwhitney_p(treatment_scores: np.ndarray, control_scores: np.ndarray) -> float:
+    """Return the two-sided Mann-Whitney U p-value for two groups.
+
+    Args:
+        treatment_scores (np.ndarray): First group's detector scores.
+        control_scores (np.ndarray): Second group's detector scores.
+
+    Returns:
+        float: The p-value, or nan if either group is empty after filtering.
+
+    """
+    treatment = treatment_scores[np.isfinite(treatment_scores)]
+    control = control_scores[np.isfinite(control_scores)]
+    if treatment.size == 0 or control.size == 0:
+        return float('nan')
+    _unused, probability = mannwhitneyu(treatment, control, alternative='two-sided')
+    return float(probability)
 
 
 def main() -> int:
