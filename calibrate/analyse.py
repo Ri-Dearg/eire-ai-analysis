@@ -169,6 +169,48 @@ def category_contrast(
             contrast(in_band, f'band_{band}', score_column, detector, period, resamples)
         )
 
+    # The POST cell opens in 2022: the split is ChatGPT's release, so December
+    # 2022 is POST (382 articles).
+    if period == PRIMARY_PERIOD:
+        for year in sorted(cell['year'].unique()):
+            in_year = cell[cell['year'] == year]
+            logger.info('%s / %s: year %d (n=%d)', detector, period, year, len(in_year))
+            records.append(
+                contrast(
+                    in_year, f'year_{year}', score_column, detector, period, resamples
+                )
+            )
+
+    band_records = [row for row in records if row['scope'].startswith('band_')]
+    weights = np.array(
+        [row['n_treatment'] + row['n_control'] for row in band_records], dtype=float
+    )
+    deltas = np.array([row['delta'] for row in band_records], dtype=float)
+    usable = np.isfinite(deltas) & (weights > 0)
+    pooled = (
+        float(np.average(deltas[usable], weights=weights[usable]))
+        if usable.any()
+        else float('nan')
+    )
+    records.append(
+        {
+            'detector': detector,
+            'period': period,
+            'scope': 'band_pooled',
+            'n_treatment': sum(row['n_treatment'] for row in band_records),
+            'n_control': sum(row['n_control'] for row in band_records),
+            'delta': pooled,
+            'ci_low': float('nan'),
+            'ci_high': float('nan'),
+            'p_value': float('nan'),
+            'material': bool(abs(pooled) >= MATERIALITY_THRESHOLD)
+            if np.isfinite(pooled)
+            else False,
+            'is_primary': False,
+        }
+    )
+    return records
+
 
 def contrast(
     frame: pd.DataFrame,
