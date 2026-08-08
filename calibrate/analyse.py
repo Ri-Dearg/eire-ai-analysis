@@ -25,6 +25,26 @@ CONTROL_CATEGORY = 'legacy'
 TREATMENT_CATEGORY = 'counter-consensus'
 
 
+# ---------- EFFECT SIZE ----------
+def cliffs_delta(treatment_scores: np.ndarray, control_scores: np.ndarray) -> float:
+    """Return Cliff's delta for treatment against control.
+
+    Args:
+        treatment_scores (np.ndarray): First group's detector scores.
+        control_scores (np.ndarray): Second group's detector scores.
+
+    Returns:
+        float: Cliff's delta, or nan if either group is empty after filtering.
+
+    """
+    treatment = treatment_scores[np.isfinite(treatment_scores)]
+    control = control_scores[np.isfinite(control_scores)]
+    if treatment.size == 0 or control.size == 0:
+        return float('nan')
+    statistic, _unused = mannwhitneyu(treatment, control, alternative='two-sided')
+    return float(2.0 * statistic / (treatment.size * control.size) - 1.0)
+
+
 def mannwhitney_p(treatment_scores: np.ndarray, control_scores: np.ndarray) -> float:
     """Return the two-sided Mann-Whitney U p-value for two groups.
 
