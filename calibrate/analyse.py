@@ -110,6 +110,34 @@ def mannwhitney_p(treatment_scores: np.ndarray, control_scores: np.ndarray) -> f
     return float(probability)
 
 
+# ---------- CONTRAST ----------
+def category_contrast(
+    corpus: pd.DataFrame,
+    detector: str,
+    period: str,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+) -> list[dict]:
+    """Return the category contrast overall, per length band, per year and pooled.
+
+    Args:
+        corpus (pd.DataFrame): Scored corpus; needs ``category``, ``period``,
+            ``year``, ``word_count`` and ``<detector>_score``.
+        detector (str): Detector whose score column is compared.
+        period (str): Period cell to restrict to, ``'post'`` or ``'pre'``.
+        resamples (int): Bootstrap resamples for the interval.
+
+    Returns:
+        list[dict]: Records with delta, interval, p-value and group sizes.
+
+    """
+    cell = corpus[corpus['period'] == period]
+    score_column = f'{detector}_score'
+    records: list[dict] = []
+    logger.info('%s / %s: overall contrast (n=%d)', detector, period, len(cell))
+    records.append(contrast(cell, 'all', score_column, detector, period, resamples))
+    print(records)
+
+
 def contrast(
     frame: pd.DataFrame,
     scope: str,
