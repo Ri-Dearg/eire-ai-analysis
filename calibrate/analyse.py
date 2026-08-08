@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,7 @@ from calibrate.calibrate import (
     FALSE_POSITIVE_TARGETS,
     KNOWN_AI,
     LENGTH_BANDS,
+    OUTLETS,
     PRIMARY,
     _load_scores,
 )
@@ -367,4 +369,31 @@ def main() -> int:
     reference['id'] = 'ai:' + reference['id'].astype(str)
     scores = {detector: _load_scores(detector) for detector in PRIMARY}
     thresholds = pd.read_csv(CALIBRATION_REPORT)
+    tpr_by_band(
+        reference, scores, thresholds, PRIMARY, OUTLETS, FALSE_POSITIVE_TARGETS
+    ).to_csv(BAND_SENSITIVITY, index=False)
+
+    primary = effects[effects.is_primary].iloc[0]
+    logger.info(
+        'primary (%s, %s, %s vs %s): delta=%+.3f [%+.3f, %+.3f] p=%.4g material=%s',
+        PRIMARY_DETECTOR,
+        PRIMARY_PERIOD,
+        TREATMENT_CATEGORY,
+        CONTROL_CATEGORY,
+        primary.delta,
+        primary.ci_low,
+        primary.ci_high,
+        primary.p_value,
+        primary.material,
+    )
+    logger.info('wrote %s and %s', PRIMARY_EFFECTS.name, BAND_SENSITIVITY.name)
     return 0
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
+    sys.exit(main())
