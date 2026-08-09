@@ -338,6 +338,60 @@ def contrast(
     }
 
 
+def outlet_contrast(
+    corpus: pd.DataFrame, detector: str, resamples: int = BOOTSTRAP_RESAMPLES
+) -> list[dict]:
+    """Return each outlet against its own pre-ChatGPT baseline, year by year.
+
+    Args:
+        corpus (pd.DataFrame): Scored corpus.
+        detector (str): Detector whose score column is compared.
+        resamples (int): Bootstrap resamples for the interval.
+
+    Returns:
+        list[dict]: One record per outlet per POST slice.
+
+    """
+    score_column = f'{detector}_score'
+    records: list[dict] = []
+
+    for outlet in OUTLETS:
+        rows = corpus[corpus['outlet'] == outlet]
+        post = rows[rows['period'] == PRIMARY_PERIOD]
+        own_pre = rows.loc[rows['period'] == 'pre', score_column].to_numpy(float)
+
+        slices = [('post_all', post)]
+        slices += [
+            (f'year_{year}', post[post['year'] == year])
+            for year in sorted(post['year'].unique())
+        ]
+        for scope, slice_rows in slices:
+            logger.info('%s: %s %s (n=%d)', detector, outlet, scope, len(slice_rows))
+            slice_scores = slice_rows[score_column].to_numpy(float)
+            delta, ci_low, ci_high = delta_ci(slice_scores, own_pre, resamples=resamples)
+            records.append(
+                {
+                    'family': 'outlet',
+                    'view': 'own_pre',
+                    'outlet': outlet,
+                    'detector': detector,
+                    'period': PRIMARY_PERIOD,
+                    'scope': scope,
+                    'n_treatment': int(np.isfinite(slice_scores).sum()),
+                    'n_control': int(np.isfinite(own_pre).sum()),
+                    'delta': delta,
+                    'ci_low': ci_low,
+                    'ci_high': ci_high,
+                    'p_value': mannwhitney_p(slice_scores, own_pre),
+                    'material': bool(abs(delta) >= MATERIALITY_THRESHOLD)
+                    if np.isfinite(delta)
+                    else False,
+                    'is_primary': False,
+                }
+            )
+    return records
+
+
 def pre_year_contrast(
     corpus: pd.DataFrame, detector: str, resamples: int = BOOTSTRAP_RESAMPLES
 ) -> list[dict]:
@@ -413,6 +467,7 @@ def main() -> int:
             for row in category_contrast(corpus, detector, period):
                 row.update(CATEGORY_LABELS)
                 records.append(row)
+                records.extend(outlet_contrast(corpus, detector))
 
     effects = pd.DataFrame(records)
     effects.to_csv(PRIMARY_EFFECTS, index=False)
