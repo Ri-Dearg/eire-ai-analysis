@@ -45,6 +45,8 @@ REPORTED_PERIODS = ('post', 'pre')
 CONTROL_CATEGORY = 'legacy'
 TREATMENT_CATEGORY = 'counter-consensus'
 
+CATEGORY_LABELS = {'family': 'category', 'view': 'all', 'outlet': '(category)'}
+
 # ---------- SETTINGS ----------
 SEED = 37
 # Settings aided by AI
@@ -336,6 +338,42 @@ def contrast(
     }
 
 
+def pre_year_contrast(
+    corpus: pd.DataFrame, detector: str, resamples: int = BOOTSTRAP_RESAMPLES
+) -> list[dict]:
+    """Return the category contrast within each PRE year.
+
+    Calls :func:`contrast` unchanged, so a PRE year delta and the primary are the
+    same computation on different rows.
+
+    Args:
+        corpus (pd.DataFrame): Scored corpus.
+        detector (str): Detector whose score column is compared.
+        resamples (int): Bootstrap resamples for the interval.
+
+    Returns:
+        list[dict]: One record per PRE year.
+
+    """
+    score_column = f'{detector}_score'
+    cell = corpus[corpus['period'] == 'pre']
+    records = []
+    for year in sorted(cell['year'].unique()):
+        in_year = cell[cell['year'] == year]
+        logger.info('%s: PRE year %d (n=%d)', detector, year, len(in_year))
+        row = contrast(in_year, f'year_{year}', score_column, detector, 'pre', resamples)
+        row.update(
+            {
+                'family': 'pre_year',
+                'view': 'all',
+                'outlet': '(category)',
+                'is_primary': False,
+            }
+        )
+        records.append(row)
+    return records
+
+
 def main() -> int:
     """Run the specified primary, co-primary and S1, and write both tables.
 
@@ -372,7 +410,10 @@ def main() -> int:
     records: list[dict] = []
     for detector in REPORTED_DETECTORS:
         for period in REPORTED_PERIODS:
-            records.extend(category_contrast(corpus, detector, period))
+            for row in category_contrast(corpus, detector, period):
+                row.update(CATEGORY_LABELS)
+                records.append(row)
+
     effects = pd.DataFrame(records)
     effects.to_csv(PRIMARY_EFFECTS, index=False)
 
