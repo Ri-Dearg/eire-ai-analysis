@@ -338,6 +338,41 @@ def contrast(
     }
 
 
+def non_wire_contrast(
+    corpus: pd.DataFrame, detector: str, resamples: int = BOOTSTRAP_RESAMPLES
+) -> list[dict]:
+    """Return the category contrast on editorial (non-wire) articles only.
+
+    Args:
+        corpus (pd.DataFrame): Scored corpus; needs ``is_wire``, ``category``,
+            ``period`` and ``<detector>_score``.
+        detector (str): Detector whose score column is compared.
+        resamples (int): Bootstrap resamples for the interval.
+
+    Returns:
+        list[dict]: One record per period.
+
+    """
+    score_column = f'{detector}_score'
+    editorial = corpus[corpus['is_wire'].astype(int) == 0]
+    records = []
+
+    for period in REPORTED_PERIODS:
+        cell = editorial[editorial['period'] == period]
+        logger.info('%s: non_wire / %s (n=%d)', detector, period, len(cell))
+        row = contrast(cell, 'all', score_column, detector, period, resamples)
+        row.update(
+            {
+                'family': 'sensitivity',
+                'view': 'non_wire',
+                'outlet': '(category)',
+                'is_primary': False,
+            }
+        )
+        records.append(row)
+    return records
+
+
 def outlet_contrast(
     corpus: pd.DataFrame, detector: str, resamples: int = BOOTSTRAP_RESAMPLES
 ) -> list[dict]:
@@ -456,6 +491,8 @@ def main() -> int:
             'year',
             'category',
             'word_count',
+            'is_wire',
+            'author',
             *[f'{detector}_score' for detector in REPORTED_DETECTORS],
         ],
     )
@@ -467,7 +504,9 @@ def main() -> int:
             for row in category_contrast(corpus, detector, period):
                 row.update(CATEGORY_LABELS)
                 records.append(row)
-                records.extend(outlet_contrast(corpus, detector))
+        records.extend(pre_year_contrast(corpus, detector))
+        records.extend(outlet_contrast(corpus, detector))
+        records.extend(non_wire_contrast(corpus, detector))
 
     effects = pd.DataFrame(records)
     effects.to_csv(PRIMARY_EFFECTS, index=False)
