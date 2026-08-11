@@ -240,9 +240,10 @@ def tab_overview(df: pd.DataFrame) -> None:
         .reindex(OUTLETS)
         .dropna(how='all')
     )
-    st.subheader('Composition (articles per outlet × period)')
+
+    st.subheader('Composition (articles per outlet × period)')  # noqa: RUF001
     st.bar_chart(comp)
-    st.subheader('Article length by outlet × period')
+    st.subheader('Article length by outlet × period')  # noqa: RUF001
     st.pyplot(_grouped_box(df, 'word_count', '', 'words per article'), width='stretch')
 
 

@@ -46,7 +46,7 @@ TIME_BUDGET = float(os.environ.get('PARSE_BUDGET', '0'))
 
 # ---------- DATE VARIABLES ----------
 RELEASE = '2022-11-30'
-TODAY = '2026-06-09'
+TODAY = '2026-06-09'  # frozen corpus snapshot; articles after this are out of scope
 MONTHS = [
     'January',
     'February',
