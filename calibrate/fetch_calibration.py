@@ -10,7 +10,6 @@ from scrape.gript_rest import ingest_gript
 from scrape.scrape import ingest
 
 # ---------- CONFIG ----------
-
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +19,7 @@ SOURCE_FEED = 'calibration'
 LEGACY = ('rte', 'irish_examiner', 'the_liberal')
 
 
+# ---------- FETCH ----------
 def _urls(outlet: str) -> list[str]:
     """Return the drawn calibration URLs for one outlet (one per line).
 
