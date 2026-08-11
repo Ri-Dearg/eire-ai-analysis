@@ -56,6 +56,7 @@ MATERIALITY_THRESHOLD = 0.15
 # Below this many reference articles a band's true-positive rate is reported as
 # not estimable rather than as a number.
 MIN_BAND_ARTICLES = 30
+TOP_BYLINES = 3
 
 
 # ---------- LENGTH BANDS ----------
@@ -211,6 +212,37 @@ def mannwhitney_p(treatment_scores: np.ndarray, control_scores: np.ndarray) -> f
         return float('nan')
     _unused, probability = mannwhitneyu(treatment, control, alternative='two-sided')
     return float(probability)
+
+
+def byline_concentration(corpus: pd.DataFrame, top: int = TOP_BYLINES) -> pd.DataFrame:
+    """Return byline concentration per outlet and period.
+
+    Args:
+        corpus (pd.DataFrame): Scored corpus; needs ``outlet``, ``period`` and
+            ``author``.
+        top (int): How many leading bylines to summarise.
+
+    Returns:
+        pd.DataFrame: One row per outlet x period.
+
+    """
+    records = []
+    for (outlet, period), cell in corpus.groupby(['outlet', 'period'], sort=False):
+        counts = cell.loc[cell['author'].notna(), 'author'].value_counts()
+        records.append(
+            {
+                'outlet': outlet,
+                'period': period,
+                'n_articles': len(cell),
+                'n_named': int(counts.sum()),
+                'n_authors': int(counts.size),
+                f'top{top}_articles': int(counts.head(top).sum()),
+                f'top{top}_share': float(counts.head(top).sum() / len(cell))
+                if len(cell)
+                else float('nan'),
+            }
+        )
+    return pd.DataFrame(records)
 
 
 # ---------- CONTRAST ----------
@@ -464,7 +496,7 @@ def pre_year_contrast(
 
 
 def main() -> int:
-    """Run the specified primary, co-primary and S1, and write both tables.
+    """Run the statistic tables.
 
     Returns:
         int: 0 on success, 1 if a required input is missing.
@@ -532,6 +564,9 @@ def main() -> int:
         primary.ci_high,
         primary.p_value,
         primary.material,
+    )
+    logger.info(
+        'byline concentration:\n%s', byline_concentration(corpus).to_string(index=False)
     )
     logger.info('wrote %s and %s', PRIMARY_EFFECTS.name, BAND_SENSITIVITY.name)
     return 0
