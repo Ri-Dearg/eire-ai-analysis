@@ -24,7 +24,12 @@ INPUTS = DETECTION_DIR / 'score_inputs.csv'
 
 # ---------- CALCULATION FIGURES ----------
 MIN_HUMAN_CHARS = 400
-LENGTH_BANDS = ((0, 150), (150, 300), (300, 10**9))
+LENGTH_BANDS = (
+    (0, 150),
+    (150, 300),
+    (300, 600),
+    (600, 10**9),
+)  # 0-149, 150-299, 300-599, 600+
 FALSE_POSITIVE_TARGETS = (0.01, 0.05)
 
 # ---------- VARIABLE STRINGS ----------
@@ -359,8 +364,8 @@ def lower_bound(
 
     Args:
         observed_positive (float): Observed corpus positive rate.
-        false_positive_rate (float): Realised false-positive rate of the same decision rule.
-        true_positive_rate (float): Measured true-positive rate (sensitivity) of that rule.
+        false_positive_rate (float): Realised false-positive rate.
+        true_positive_rate (float): Measured true-positive rate.
 
     Returns:
         float: Estimated lower-bound AI share (nan if tpr <= 0).
