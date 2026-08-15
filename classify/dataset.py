@@ -52,6 +52,34 @@ def harmonise(text: str) -> str:
     return WHITESPACE.sub(' ', str(text)).translate(_TYPOGRAPHIC).strip()
 
 
+def _read_human() -> pd.DataFrame:
+    """Return the held-out Irish human anchor.
+
+    Returns:
+        pd.DataFrame: One row per usable anchor article.
+
+    Raises:
+        FileNotFoundError: If the parsed anchor is absent.
+
+    """
+    if not ANCHOR.exists():
+        message = f'{ANCHOR} not found; the anchor is local-only.'
+        raise FileNotFoundError(message)
+
+    frame = pd.read_csv(
+        ANCHOR, usecols=['article_id', 'outlet', 'body_text'], dtype={'article_id': str}
+    )
+    frame['text'] = frame['body_text'].map(harmonise)
+    frame['n_words'] = frame['text'].str.split().str.len()
+    frame = frame[frame['n_words'] >= MIN_WORDS].copy()
+    frame['id'] = 'anchor:' + frame['outlet'] + ':' + frame['article_id']
+    frame['model'] = 'human'
+    frame['label'] = LABEL_HUMAN
+    frame['prompt_id'] = ''
+    logger.info('anchor articles: %d', len(frame))
+    return frame[list(COLUMNS)]
+
+
 def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
     """Return an AI sample balanced against the human class and even across models.
 
@@ -94,48 +122,30 @@ def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
     return ai[['id', 'prompt_id', 'model', 'label', 'n_words', 'text']]
 
 
-def _read_human() -> pd.DataFrame:
-    """Return the human stories from the gsingh1 source file.
+def _assign_splits(prompt_ids: np.ndarray, seed: int = SEED) -> dict[int, str]:
+    """Return a split label for every prompt id.
 
     Args:
-        None.
+        prompt_ids (np.ndarray): Unique prompt ids present in the data.
+        seed (int): RNG seed, so the partition is reproducible.
 
     Returns:
-        pd.DataFrame: One row per usable human story, with its prompt id.
-
-    Raises:
-        FileNotFoundError: If the gsingh1 source file is absent.
+        dict[int, str]: ``{prompt_id: 'train' | 'validation' | 'test'}``.
 
     """
-    if not GSINGH_SRC.exists():
-        message = (
-            f'{GSINGH_SRC} not found. It is the raw gsingh1-py/train download; '
-            'clean_gsingh.py reads the same file.'
-        )
-        raise FileNotFoundError(message)
-
-    csv.field_size_limit(10**9)
-    records = []
-    with GSINGH_SRC.open(newline='', encoding='utf-8') as handle:
-        for prompt_id, row in enumerate(csv.DictReader(handle)):
-            text = harmonise(row.get(HUMAN_COLUMN) or '')
-            if _CHROME.search(text):
-                continue
-            word_count = len(text.split())
-            if word_count < MIN_WORDS:
-                continue
-            records.append(
-                {
-                    'id': f'human:{prompt_id}',
-                    'prompt_id': prompt_id,
-                    'model': 'human',
-                    'label': LABEL_HUMAN,
-                    'n_words': word_count,
-                    'text': text,
-                }
-            )
-    logger.info('human stories kept: %d', len(records))
-    return pd.DataFrame(records)
+    rng = np.random.default_rng(seed)
+    shuffled = rng.permutation(np.sort(prompt_ids))
+    train_end = int(len(shuffled) * TRAIN_FRACTION)
+    validation_end = train_end + int(len(shuffled) * VALIDATION_FRACTION)
+    assignment = {}
+    for index, prompt_id in enumerate(shuffled):
+        if index < train_end:
+            assignment[int(prompt_id)] = 'train'
+        elif index < validation_end:
+            assignment[int(prompt_id)] = 'validation'
+        else:
+            assignment[int(prompt_id)] = 'test'
+    return assignment
 
 
 def build(output_dir: Path = OUTPUT_DIR, seed: int = SEED) -> dict[str, pd.DataFrame]:
