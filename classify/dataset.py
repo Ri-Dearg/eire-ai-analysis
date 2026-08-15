@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from calibrate.clean_gsingh import normalise
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def _read_human() -> pd.DataFrame:
     records = []
     with GSINGH_SRC.open(newline='', encoding='utf-8') as handle:
         for prompt_id, row in enumerate(csv.DictReader(handle)):
-            text = (row.get(HUMAN_COLUMN) or '').strip()
+            text = normalise(row.get(HUMAN_COLUMN) or '')
             word_count = len(text.split())
             if word_count < MIN_WORDS:
                 continue
