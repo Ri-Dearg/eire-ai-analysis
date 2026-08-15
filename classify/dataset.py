@@ -194,7 +194,7 @@ def main() -> int:
 
     """
     try:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        build()
     except FileNotFoundError:
         logger.exception('missing input')
         return 1
