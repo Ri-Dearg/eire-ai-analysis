@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -35,6 +36,32 @@ COLUMNS = ('id', 'prompt_id', 'model', 'label', 'n_words', 'text')
 # each held-out split, which is enough for a stable F1 at this sample size.
 TRAIN_FRACTION = 0.70
 VALIDATION_FRACTION = 0.15
+
+# NYT prose uses typographic punctuation; LLM output uses ASCII. Left alone the classifier
+# learns to distinguish the two.
+_TYPOGRAPHIC = str.maketrans(
+    {'’': "'", '‘': "'", '“': '"', '”': '"', '—': '-', '–': '-', '…': '...'}
+)
+
+# gsingh1's Human_story column carries whole NYT pages, not just articles: video
+# transcripts, navigation furniture, section chrome.
+_CHROME = re.compile(
+    r'(?i)(new video loaded|\btranscript\b|supported by|site search navigation'
+    r'|site navigation|advertisement)'
+)
+
+
+def harmonise(text: str) -> str:
+    """Apply identical surface cleaning to both classes.
+
+    Args:
+        text (str): Raw article text from either class.
+
+    Returns:
+        str: Whitespace-collapsed, punctuation-normalised text.
+
+    """
+    return normalise(text).translate(_TYPOGRAPHIC)
 
 
 def _assign_splits(prompt_ids: np.ndarray, seed: int = SEED) -> dict[int, str]:
@@ -85,6 +112,7 @@ def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
         raise FileNotFoundError(message)
 
     frame = pd.read_csv(KNOWN_AI)
+    frame['text'] = frame['text'].astype(str).map(harmonise)
     frame = frame[frame['n_words'] >= MIN_WORDS].copy()
     frame['prompt_id'] = frame['id'].str.rsplit(':', n=1).str[-1].astype(int)
 
@@ -127,7 +155,9 @@ def _read_human() -> pd.DataFrame:
     records = []
     with GSINGH_SRC.open(newline='', encoding='utf-8') as handle:
         for prompt_id, row in enumerate(csv.DictReader(handle)):
-            text = normalise(row.get(HUMAN_COLUMN) or '')
+            text = harmonise(row.get(HUMAN_COLUMN) or '')
+            if _CHROME.search(text):
+                continue
             word_count = len(text.split())
             if word_count < MIN_WORDS:
                 continue
