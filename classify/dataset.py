@@ -18,76 +18,38 @@ logger = logging.getLogger(__name__)
 # ---------- FILE SYSTEM ----------
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
-CALIBRATION_DIR = DATA / 'calibration'
+ANCHOR = DATA / 'calibration' / 'human_parsed.csv'
+GENERATED = DATA / 'generation' / 'generated_irish_ai.csv'
 OUTPUT_DIR = DATA / 'classify'
 
-GSINGH_SRC = CALIBRATION_DIR / 'gsingh1_train' / 'train.csv'
-KNOWN_AI = CALIBRATION_DIR / 'known_ai.csv'
-
-HUMAN_COLUMN = 'Human_story'
-MIN_WORDS = 50
+# ---------- SETTINGS ----------
 SEED = 37
-
-LABEL_HUMAN = 0
-LABEL_AI = 1
-COLUMNS = ('id', 'prompt_id', 'model', 'label', 'n_words', 'text')
-
-# Fractions of the prompt pool, not of the rows. 70/15/15 leaves ~1,100 prompts in
-# each held-out split, which is enough for a stable F1 at this sample size.
+MIN_WORDS = 50
 TRAIN_FRACTION = 0.70
 VALIDATION_FRACTION = 0.15
 
-# NYT prose uses typographic punctuation; LLM output uses ASCII. Left alone the classifier
-# learns to distinguish the two.
+LABEL_HUMAN = 0
+LABEL_AI = 1
+COLUMNS = ('id', 'prompt_id', 'model', 'outlet', 'label', 'n_words', 'text')
+# Applied to both classes. Typographic punctuation is a publisher habit, not an
+# authorship signal, if it is not normalised, it can be easily detected.
 _TYPOGRAPHIC = str.maketrans(
     {'’': "'", '‘': "'", '“': '"', '”': '"', '—': '-', '–': '-', '…': '...'}
 )
-
-# gsingh1's Human_story column carries whole NYT pages, not just articles: video
-# transcripts, navigation furniture, section chrome.
-_CHROME = re.compile(
-    r'(?i)(new video loaded|\btranscript\b|supported by|site search navigation'
-    r'|site navigation|advertisement)'
-)
+WHITESPACE = re.compile(r'\s+')
 
 
 def harmonise(text: str) -> str:
-    """Apply identical surface cleaning to both classes.
+    """Collapse whitespace and normalise punctuation.
 
     Args:
-        text (str): Raw article text from either class.
+        text (str): Raw article or generated text.
 
     Returns:
-        str: Whitespace-collapsed, punctuation-normalised text.
+        str: Cleaned text.
 
     """
-    return normalise(text).translate(_TYPOGRAPHIC)
-
-
-def _assign_splits(prompt_ids: np.ndarray, seed: int = SEED) -> dict[int, str]:
-    """Return a split label for every prompt id.
-
-    Args:
-        prompt_ids (np.ndarray): Unique prompt ids present in the data.
-        seed (int): RNG seed, so the partition is reproducible.
-
-    Returns:
-        dict[int, str]: ``{prompt_id: 'train' | 'validation' | 'test'}``.
-
-    """
-    rng = np.random.default_rng(seed)
-    shuffled = rng.permutation(np.sort(prompt_ids))
-    train_end = int(len(shuffled) * TRAIN_FRACTION)
-    validation_end = train_end + int(len(shuffled) * VALIDATION_FRACTION)
-    assignment = {}
-    for index, prompt_id in enumerate(shuffled):
-        if index < train_end:
-            assignment[int(prompt_id)] = 'train'
-        elif index < validation_end:
-            assignment[int(prompt_id)] = 'validation'
-        else:
-            assignment[int(prompt_id)] = 'test'
-    return assignment
+    return WHITESPACE.sub(' ', str(text)).translate(_TYPOGRAPHIC).strip()
 
 
 def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
@@ -113,6 +75,7 @@ def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
 
     frame = pd.read_csv(KNOWN_AI)
     frame['text'] = frame['text'].astype(str).map(harmonise)
+    frame['n_words'] = frame['text'].str.split().str.len()
     frame = frame[frame['n_words'] >= MIN_WORDS].copy()
     frame['prompt_id'] = frame['id'].str.rsplit(':', n=1).str[-1].astype(int)
 
