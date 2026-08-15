@@ -144,6 +144,48 @@ def _read_human() -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+def build(output_dir: Path = OUTPUT_DIR, seed: int = SEED) -> dict[str, pd.DataFrame]:
+    """Build the three splits and write them as CSV.
+
+    Args:
+        output_dir (Path): Directory to write ``train.csv`` and friends into.
+        seed (int): RNG seed for both the AI sample and the prompt partition.
+
+    Returns:
+        dict[str, pd.DataFrame]: The three splits, keyed by name.
+
+    """
+    human = _read_human()
+    ai = _read_ai(target_total=len(human), seed=seed)
+    combined = pd.concat([human, ai], ignore_index=True)[list(COLUMNS)]
+
+    assignment = _assign_splits(combined['prompt_id'].unique(), seed=seed)
+    combined['split'] = combined['prompt_id'].map(assignment)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    splits = {}
+    for name in ('train', 'validation', 'test'):
+        rows = combined[combined['split'] == name].drop(columns='split')
+        rows = rows.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+        rows.to_csv(output_dir / f'{name}.csv', index=False)
+        splits[name] = rows
+        logger.info(
+            '%-11s %6d rows  (%d human / %d AI)  %d prompts',
+            name,
+            len(rows),
+            int((rows['label'] == LABEL_HUMAN).sum()),
+            int((rows['label'] == LABEL_AI).sum()),
+            rows['prompt_id'].nunique(),
+        )
+    # Overlap suggested by AI
+    overlap = set(splits['train']['prompt_id']) & set(splits['test']['prompt_id'])
+    if overlap:
+        logger.error('prompt leakage between train and test: %d prompts', len(overlap))
+    else:
+        logger.info('no prompt overlap between splits')
+    return splits
+
+
 def main() -> int:
     """Build the classifier splits.
 
