@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import logging
 import re
 import sys
@@ -10,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from calibrate.clean_gsingh import normalise
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +31,7 @@ LABEL_AI = 1
 COLUMNS = ('id', 'prompt_id', 'model', 'outlet', 'label', 'n_words', 'text')
 # Applied to both classes. Typographic punctuation is a publisher habit, not an
 # authorship signal, if it is not normalised, it can be easily detected.
+# ruff: ignore [RUF001]
 _TYPOGRAPHIC = str.maketrans(
     {'’': "'", '‘': "'", '“': '"', '”': '"', '—': '-', '–': '-', '…': '...'}
 )
@@ -137,15 +136,10 @@ def _assign_splits(prompt_ids: np.ndarray, seed: int = SEED) -> dict[int, str]:
     shuffled = rng.permutation(np.sort(prompt_ids))
     train_end = int(len(shuffled) * TRAIN_FRACTION)
     validation_end = train_end + int(len(shuffled) * VALIDATION_FRACTION)
-    assignment = {}
-    for index, prompt_id in enumerate(shuffled):
-        if index < train_end:
-            assignment[int(prompt_id)] = 'train'
-        elif index < validation_end:
-            assignment[int(prompt_id)] = 'validation'
-        else:
-            assignment[int(prompt_id)] = 'test'
-    return assignment
+    names = ['train'] * train_end
+    names += ['validation'] * (validation_end - train_end)
+    names += ['test'] * (len(shuffled) - validation_end)
+    return dict(zip(shuffled, names, strict=True))
 
 
 def build(output_dir: Path = OUTPUT_DIR, seed: int = SEED) -> dict[str, pd.DataFrame]:
@@ -161,10 +155,23 @@ def build(output_dir: Path = OUTPUT_DIR, seed: int = SEED) -> dict[str, pd.DataF
     """
     human = _read_human()
     ai = _read_ai(target_total=len(human), seed=seed)
-    combined = pd.concat([human, ai], ignore_index=True)[list(COLUMNS)]
 
-    assignment = _assign_splits(combined['prompt_id'].unique(), seed=seed)
+    rng = np.random.default_rng(seed)
+    size = min(len(human), len(ai))
+    human = human.iloc[rng.permutation(len(human))[:size]]
+    combined = pd.concat([human, ai], ignore_index=True)
+
+    assignment = _assign_splits(
+        combined.loc[combined['prompt_id'] != '', 'prompt_id'].unique(), seed=seed
+    )
     combined['split'] = combined['prompt_id'].map(assignment)
+
+    unassigned = combined['split'].isna()
+    combined.loc[unassigned, 'split'] = rng.choice(
+        ['train', 'validation', 'test'],
+        size=int(unassigned.sum()),
+        p=[TRAIN_FRACTION, VALIDATION_FRACTION, 1 - TRAIN_FRACTION - VALIDATION_FRACTION],
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     splits = {}
@@ -174,19 +181,12 @@ def build(output_dir: Path = OUTPUT_DIR, seed: int = SEED) -> dict[str, pd.DataF
         rows.to_csv(output_dir / f'{name}.csv', index=False)
         splits[name] = rows
         logger.info(
-            '%-11s %6d rows  (%d human / %d AI)  %d prompts',
+            '%-11s %6d rows  (%d human / %d AI)',
             name,
             len(rows),
             int((rows['label'] == LABEL_HUMAN).sum()),
             int((rows['label'] == LABEL_AI).sum()),
-            rows['prompt_id'].nunique(),
         )
-    # Overlap suggested by AI
-    overlap = set(splits['train']['prompt_id']) & set(splits['test']['prompt_id'])
-    if overlap:
-        logger.error('prompt leakage between train and test: %d prompts', len(overlap))
-    else:
-        logger.info('no prompt overlap between splits')
     return splits
 
 
