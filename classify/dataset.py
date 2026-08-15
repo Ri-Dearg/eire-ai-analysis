@@ -7,6 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,46 @@ SEED = 37
 LABEL_HUMAN = 0
 LABEL_AI = 1
 COLUMNS = ('id', 'prompt_id', 'model', 'label', 'n_words', 'text')
+
+
+def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
+    """Return an AI sample balanced against the human class and even across models.
+
+    ``known_ai.csv`` ids are ``<model>:<prompt_id>``, which is what lets an AI row be
+    tied back to the prompt its human counterpart came from.
+
+    Args:
+        target_total (int): Number of AI rows wanted in total.
+        seed (int): RNG seed, so the sample is reproducible.
+
+    Returns:
+        pd.DataFrame: The sampled AI rows.
+
+    Raises:
+        FileNotFoundError: If ``known_ai.csv`` is absent.
+
+    """
+    if not KNOWN_AI.exists():
+        message = f'{KNOWN_AI} not found. Run `python -m calibrate.clean_gsingh` first.'
+        raise FileNotFoundError(message)
+
+    frame = pd.read_csv(KNOWN_AI)
+    frame = frame[frame['n_words'] >= MIN_WORDS].copy()
+    frame['prompt_id'] = frame['id'].str.rsplit(':', n=1).str[-1].astype(int)
+
+    models = sorted(frame['model'].unique())
+    per_model = target_total // len(models)
+    rng = np.random.default_rng(seed)
+    sampled = [
+        rows.iloc[rng.permutation(len(rows))[: min(per_model, len(rows))]]
+        for _, rows in frame.groupby('model', sort=True)
+    ]
+    ai = pd.concat(sampled, ignore_index=True)
+    ai['label'] = LABEL_AI
+    logger.info(
+        'AI rows sampled: %d across %d models (%d each)', len(ai), len(models), per_model
+    )
+    return ai[['id', 'prompt_id', 'model', 'label', 'n_words', 'text']]
 
 
 def _read_human() -> pd.DataFrame:
