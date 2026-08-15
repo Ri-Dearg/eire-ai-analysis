@@ -26,10 +26,40 @@ HUMAN_COLUMN = 'Human_story'
 MIN_WORDS = 50
 SEED = 37
 
-
 LABEL_HUMAN = 0
 LABEL_AI = 1
 COLUMNS = ('id', 'prompt_id', 'model', 'label', 'n_words', 'text')
+
+# Fractions of the prompt pool, not of the rows. 70/15/15 leaves ~1,100 prompts in
+# each held-out split, which is enough for a stable F1 at this sample size.
+TRAIN_FRACTION = 0.70
+VALIDATION_FRACTION = 0.15
+
+
+def _assign_splits(prompt_ids: np.ndarray, seed: int = SEED) -> dict[int, str]:
+    """Return a split label for every prompt id.
+
+    Args:
+        prompt_ids (np.ndarray): Unique prompt ids present in the data.
+        seed (int): RNG seed, so the partition is reproducible.
+
+    Returns:
+        dict[int, str]: ``{prompt_id: 'train' | 'validation' | 'test'}``.
+
+    """
+    rng = np.random.default_rng(seed)
+    shuffled = rng.permutation(np.sort(prompt_ids))
+    train_end = int(len(shuffled) * TRAIN_FRACTION)
+    validation_end = train_end + int(len(shuffled) * VALIDATION_FRACTION)
+    assignment = {}
+    for index, prompt_id in enumerate(shuffled):
+        if index < train_end:
+            assignment[int(prompt_id)] = 'train'
+        elif index < validation_end:
+            assignment[int(prompt_id)] = 'validation'
+        else:
+            assignment[int(prompt_id)] = 'test'
+    return assignment
 
 
 def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
