@@ -81,45 +81,45 @@ def _read_human() -> pd.DataFrame:
 
 
 def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
-    """Return an AI sample balanced against the human class and even across models.
-
-    ``known_ai.csv`` ids are ``<model>:<prompt_id>``, which is what lets an AI row be
-    tied back to the prompt its human counterpart came from.
+    """Return a generator-balanced sample of the Irish-register generated set.
 
     Args:
-        target_total (int): Number of AI rows wanted in total.
-        seed (int): RNG seed, so the sample is reproducible.
+        target_total (int): Number of AI rows wanted.
+        seed (int): RNG seed.
 
     Returns:
-        pd.DataFrame: The sampled AI rows.
+        pd.DataFrame: The sampled generated rows.
 
     Raises:
-        FileNotFoundError: If ``known_ai.csv`` is absent.
+        FileNotFoundError: If the generation manifest is absent.
 
     """
-    if not KNOWN_AI.exists():
-        message = f'{KNOWN_AI} not found. Run `python -m calibrate.clean_gsingh` first.'
+    if not GENERATED.exists():
+        message = f'{GENERATED} not found; run the generation stage first.'
         raise FileNotFoundError(message)
 
-    frame = pd.read_csv(KNOWN_AI)
-    frame['text'] = frame['text'].astype(str).map(harmonise)
+    frame = pd.read_csv(GENERATED)
+    frame['text'] = frame['text'].map(harmonise)
     frame['n_words'] = frame['text'].str.split().str.len()
     frame = frame[frame['n_words'] >= MIN_WORDS].copy()
-    frame['prompt_id'] = frame['id'].str.rsplit(':', n=1).str[-1].astype(int)
+    frame['prompt_id'] = frame['id'].str.rsplit(':', n=1).str[-1]
+    frame['label'] = LABEL_AI
 
-    models = sorted(frame['model'].unique())
-    per_model = target_total // len(models)
+    per_model = max(1, target_total // frame['model'].nunique())
     rng = np.random.default_rng(seed)
-    sampled = [
-        rows.iloc[rng.permutation(len(rows))[: min(per_model, len(rows))]]
-        for _, rows in frame.groupby('model', sort=True)
-    ]
-    ai = pd.concat(sampled, ignore_index=True)
-    ai['label'] = LABEL_AI
-    logger.info(
-        'AI rows sampled: %d across %d models (%d each)', len(ai), len(models), per_model
+    sampled = pd.concat(
+        [
+            rows.iloc[rng.permutation(len(rows))[: min(per_model, len(rows))]]
+            for _, rows in frame.groupby('model', sort=True)
+        ],
+        ignore_index=True,
     )
-    return ai[['id', 'prompt_id', 'model', 'label', 'n_words', 'text']]
+    logger.info(
+        'generated articles: %d across %d models',
+        len(sampled),
+        per_model and sampled['model'].nunique(),
+    )
+    return sampled[list(COLUMNS)]
 
 
 def _assign_splits(prompt_ids: np.ndarray, seed: int = SEED) -> dict[int, str]:
