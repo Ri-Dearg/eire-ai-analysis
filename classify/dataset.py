@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / 'data'
 ANCHOR = DATA / 'calibration' / 'human_parsed.csv'
-GENERATED = DATA / 'generation' / 'generated_irish_ai.csv'
+GENERATED = (
+    DATA / 'generation' / 'generated_irish_ai.csv',
+    DATA / 'generation' / 'generated_frontier_ai.csv',
+)
 OUTPUT_DIR = DATA / 'classify'
 
 # ---------- SETTINGS ----------
@@ -29,6 +32,8 @@ VALIDATION_FRACTION = 0.15
 LABEL_HUMAN = 0
 LABEL_AI = 1
 COLUMNS = ('id', 'prompt_id', 'model', 'outlet', 'label', 'n_words', 'text')
+# Generated text is trimmed to its last complete sentence, so human must be too.
+SENTENCE_END = re.compile(r'^.*[.!?]["\']?', re.DOTALL)
 # Applied to both classes. Typographic punctuation is a publisher habit, not an
 # authorship signal, if it is not normalised, it can be easily detected.
 # ruff: ignore [RUF001]
@@ -36,19 +41,24 @@ _TYPOGRAPHIC = str.maketrans(
     {'’': "'", '‘': "'", '“': '"', '”': '"', '—': '-', '–': '-', '…': '...'}
 )
 WHITESPACE = re.compile(r'\s+')
+WORD_BUDGET = 400
 
 
-def harmonise(text: str) -> str:
-    """Collapse whitespace and normalise punctuation.
+def harmonise(text: str, budget: int = WORD_BUDGET) -> str:
+    """Collapse whitespace, normalise punctuation, cut to budget, end on a sentence.
 
     Args:
         text (str): Raw article or generated text.
+        budget (int): Maximum words to keep.
 
     Returns:
-        str: Cleaned text.
+        str: Cleaned text, at most ``budget`` words, ending at a sentence boundary.
 
     """
-    return WHITESPACE.sub(' ', str(text)).translate(_TYPOGRAPHIC).strip()
+    cleaned = WHITESPACE.sub(' ', str(text)).translate(_TYPOGRAPHIC).strip()
+    cleaned = ' '.join(cleaned.split()[:budget])
+    match = SENTENCE_END.match(cleaned)
+    return match.group(0) if match else cleaned
 
 
 def _read_human() -> pd.DataFrame:
@@ -93,11 +103,21 @@ def _read_ai(target_total: int, seed: int = SEED) -> pd.DataFrame:
         FileNotFoundError: If the generation manifest is absent.
 
     """
-    if not GENERATED.exists():
-        message = f'{GENERATED} not found; run the generation stage first.'
+    frames = []
+    for path in GENERATED:
+        if not path.exists():
+            logger.warning('%s not found; skipping', path.name)
+            continue
+        part = pd.read_csv(path)
+        if 'outlet' not in part.columns:
+            part['outlet'] = ''
+        frames.append(part[['id', 'model', 'outlet', 'text']])
+
+    if not frames:
+        message = f'none of {[p.name for p in GENERATED]} found; generate first.'
         raise FileNotFoundError(message)
 
-    frame = pd.read_csv(GENERATED)
+    frame = pd.concat(frames, ignore_index=True)
     frame['text'] = frame['text'].map(harmonise)
     frame['n_words'] = frame['text'].str.split().str.len()
     frame = frame[frame['n_words'] >= MIN_WORDS].copy()
