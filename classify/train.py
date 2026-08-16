@@ -6,6 +6,7 @@ Module heavily aided by AI development due to difficulty training on local archi
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -60,6 +61,17 @@ NUMERICAL_ZERO = 1e-6
 # A loss this small on a balanced binary task means perfect separation. Chance is
 # ln(2) = 0.693, so anything near zero is a shortcut rather than learning.
 CONVERGED_LOSS = 0.01
+# Matches the floor in classify/dataset.py. Applied again here because harmonise()
+# runs after that floor, so a row can pass it and then be stripped to nothing.
+MIN_SPLIT_WORDS = 50
+
+# Fraction of training steps spent warming the learning rate up from zero.
+WARMUP_FRACTION = 0.06
+LOG_EVERY = 25
+
+SGD_LEARNING_RATE = float(os.environ.get('CLASSIFY_SGD_LR', '1e-4'))
+SGD_MOMENTUM = 0.9
+WEIGHT_DECAY = 0.01
 
 
 def compute_metrics(predictions: object) -> dict[str, float]:
@@ -164,6 +176,9 @@ class SanityGuard(TrainerCallback):
                 'further epoch can change anything. This one is the backend or the '
                 'optimiser, not the data.'
             )
+        if os.environ.get('CLASSIFY_ALLOW_ZERO_LOSS'):
+            logger.warning(message)
+            return
         raise RuntimeError(message)
 
     def _report_progress(self, state: object) -> None:
@@ -173,7 +188,6 @@ class SanityGuard(TrainerCallback):
             state (object): Trainer state, carrying step and max_steps.
 
         """
-
         step = getattr(state, 'global_step', 0)
         total = getattr(state, 'max_steps', 0)
         if step and total:
@@ -292,7 +306,13 @@ def train() -> dict[str, float]:
         compute_metrics=compute_metrics,
         callbacks=[SanityGuard()],
     )
+    trainer.train(resume_from_checkpoint=bool(os.environ.get('CLASSIFY_RESUME')))
     metrics = trainer.evaluate()
+
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    trainer.save_model(str(MODEL_DIR))
+    tokenizer.save_pretrained(str(MODEL_DIR))
+    logger.info('saved to %s', MODEL_DIR)
     return metrics
 
 
@@ -300,14 +320,37 @@ def main() -> int:
     """Fine-tune the classifier.
 
     Returns:
-        int: 0 on success, 1 if the splits are missing.
+        int: 0 on success, 1 if the splits are missing or the run did not learn.
 
     """
     try:
-        return 1
+        metrics = train()
     except FileNotFoundError:
         logger.exception('missing input')
         return 1
+    except RuntimeError:
+        logger.exception('training aborted')
+        return 1
+
+    for key, value in sorted(metrics.items()):
+        if key.startswith('eval_'):
+            logger.info('  %-12s %.4f', key.removeprefix('eval_'), value)
+    f1 = metrics.get('eval_f1', float('nan'))
+    logger.info(
+        'validation F1 = %.4f (Proposal target 0.85) — %s',
+        f1,
+        'met' if f1 >= PROPOSAL_TARGET_F1 else 'not met',
+    )
+    logger.info(
+        'settings to record beside the result: %s · %d tokens · %.4g epochs · '
+        'batch %d · lr %g · seed %d',
+        BASE_MODEL,
+        MAX_TOKENS,
+        EPOCHS,
+        BATCH_SIZE,
+        LEARNING_RATE,
+        SEED,
+    )
     return 0
 
 
