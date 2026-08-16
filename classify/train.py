@@ -1,19 +1,26 @@
-"""Fine-tune DeBERTa-v3-base to separate human from AI-generated news text."""
+"""Fine-tune DeBERTa-v3-base to separate human from AI-generated news text.
+
+Module heavily aided by AI development due to difficulty training on local architecture.
+"""
 
 from __future__ import annotations
 
 import logging
 import sys
+import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     DataCollatorWithPadding,
     Trainer,
+    TrainerCallback,
     TrainingArguments,
 )
 
@@ -46,6 +53,139 @@ LOG_EVERY = 25
 SGD_LEARNING_RATE = 1e-4
 SGD_MOMENTUM = 0.9
 WEIGHT_DECAY = 0.01
+
+# Below this a logged loss is zero with floating-point noise, not a real value:
+# the first failed run logged -7.5e-12 and 2.4e-21, which are zeros, not garbage.
+NUMERICAL_ZERO = 1e-6
+# A loss this small on a balanced binary task means perfect separation. Chance is
+# ln(2) = 0.693, so anything near zero is a shortcut rather than learning.
+CONVERGED_LOSS = 0.01
+
+
+def compute_metrics(predictions: object) -> dict[str, float]:
+    """Return accuracy, precision, recall and F1 for the AI class.
+
+    F1 is binary on the AI class rather than macro-averaged: the Proposal's 0.85 target
+    is about detecting AI text, and a macro average lets strong performance on the human
+    class disguise weak detection.
+
+    Args:
+        predictions (object): A transformers ``EvalPrediction``.
+
+    Returns:
+        dict[str, float]: Metric name to value.
+
+    """
+    logits, labels = predictions
+    predicted = np.asarray(logits).argmax(axis=-1)
+    precision, recall, f1, _unused = precision_recall_fscore_support(
+        labels, predicted, average='binary', pos_label=AI_LABEL, zero_division=0
+    )
+    return {
+        'accuracy': float(accuracy_score(labels, predicted)),
+        'precision': float(precision),
+        'recall': float(recall),
+        'f1': float(f1),
+    }
+
+
+# SanityGuard entirely built by AI. The issue of running on Mac Architecture made
+# runs quire long before I could see if results were being generated. THis aided in
+# shortening the time before I could gauge the result.
+class SanityGuard(TrainerCallback):
+    """Abort the moment the run shows it is not learning.
+
+    Attributes:
+        started (float): Wall-clock time the run began, for the projection.
+        grad_norms (list[float]): Every gradient norm logged so far.
+        losses (list[float]): Every training loss logged so far.
+
+    """
+
+    def __init__(self) -> None:
+        """Initialise the timer and the gradient-norm history."""
+        self.started = time.time()
+        self.grad_norms: list[float] = []
+        self.losses: list[float] = []
+
+    def on_log(
+        self, _args: object, state: object, _control: object, **kwargs: object
+    ) -> None:
+        """Check the latest log line and project the finish time.
+
+        Args:
+            _args (object): Training arguments; unused, positional in the API.
+            state (object): Trainer state, carrying step and max_steps.
+            _control (object): Trainer control; unused, positional in the API.
+            **kwargs (object): Carries ``logs``, the metrics for this step.
+
+        Raises:
+            RuntimeError: If the loss is meaningfully negative, or the gradient has
+                been zero for several logs.
+
+        """
+        logs = kwargs.get('logs') or {}
+        loss = logs.get('loss')
+        if loss is not None:
+            self.losses.append(float(loss))
+            if loss < -NUMERICAL_ZERO:
+                message = (
+                    f'loss {loss:.3g} is negative — cross-entropy cannot be. The '
+                    'forward pass is producing invalid values.'
+                )
+                raise RuntimeError(message)
+
+        norm = logs.get('grad_norm')
+        if norm is not None:
+            self.grad_norms.append(float(norm))
+        if len(self.grad_norms) < MIN_GRAD_LOGS or max(self.grad_norms) != 0:
+            self._report_progress(state)
+            return
+
+        # A zero gradient has two completely different causes and pointing at the wrong
+        # one costs hours. Cross-entropy at chance on a balanced binary task is ln(2) =
+        # 0.693, so the loss beside the zero gradient says which it is.
+        recent = self.losses[-MIN_GRAD_LOGS:] if self.losses else [float('nan')]
+        # The latest loss, not the largest: an early step can still be mid-descent
+        # while the run has already collapsed to zero.
+        if abs(recent[-1]) < CONVERGED_LOSS:
+            message = (
+                f'gradient is zero because the loss is zero (recent: {recent}). The '
+                'model has separated the classes perfectly within a few hundred '
+                'examples, which for this task means a shortcut, not learning — some '
+                'surface feature differs between the two classes. Compare the classes '
+                'on whitespace, quote characters, punctuation and boilerplate before '
+                'training again; do not blame the device.'
+            )
+        else:
+            message = (
+                f'gradient is zero while the loss sits at {recent[-1]:.4g}, near the '
+                'ln(2) = 0.693 chance level. No signal is reaching the weights, so no '
+                'further epoch can change anything. This one is the backend or the '
+                'optimiser, not the data.'
+            )
+        raise RuntimeError(message)
+
+    def _report_progress(self, state: object) -> None:
+        """Log the step count and a projected finish time.
+
+        Args:
+            state (object): Trainer state, carrying step and max_steps.
+
+        """
+
+        step = getattr(state, 'global_step', 0)
+        total = getattr(state, 'max_steps', 0)
+        if step and total:
+            elapsed = time.time() - self.started
+            remaining = elapsed / step * (total - step)
+            logger.info(
+                'step %d/%d · %.1f s/step · about %.1f h remaining',
+                step,
+                total,
+                elapsed / step,
+                remaining / 3600,
+            )
 
 
 def _load_split(name: str, tokenizer: object) -> object:
@@ -149,6 +289,8 @@ def train() -> dict[str, float]:
         eval_dataset=datasets['validation'],
         data_collator=DataCollatorWithPadding(tokenizer),
         processing_class=tokenizer,
+        compute_metrics=compute_metrics,
+        callbacks=[SanityGuard()],
     )
     metrics = trainer.evaluate()
     return metrics
