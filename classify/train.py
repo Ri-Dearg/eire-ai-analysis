@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import torch
 from datasets import Dataset
 from transformers import (
     AutoModelForSequenceClassification,
@@ -42,6 +43,10 @@ MIN_GRAD_LOGS = 3
 WARMUP_FRACTION = 0.06
 LOG_EVERY = 25
 
+SGD_LEARNING_RATE = 1e-4
+SGD_MOMENTUM = 0.9
+WEIGHT_DECAY = 0.01
+
 
 def _load_split(name: str, tokenizer: object) -> object:
     """Return one tokenised split.
@@ -63,7 +68,7 @@ def _load_split(name: str, tokenizer: object) -> object:
         raise FileNotFoundError(message)
 
     frame = pd.read_csv(path)[['text', 'label']]
-    dataset = Dataset.from_pandas(frame, preserve_index=False)
+    dataset = Dataset.from_pandas(frame.reset_index(drop=True), preserve_index=False)
     logger.info(
         '%-11s %5d examples (%d human / %d AI)',
         name,
@@ -116,9 +121,7 @@ def train() -> dict[str, float]:
         num_train_epochs=EPOCHS,
         per_device_train_batch_size=BATCH_SIZE,
         per_device_eval_batch_size=BATCH_SIZE * 2,
-        learning_rate=LEARNING_RATE,
         warmup_steps=int(total_steps * WARMUP_FRACTION),
-        weight_decay=0.01,
         logging_steps=LOG_EVERY,
         eval_strategy='epoch',
         save_strategy='epoch',
@@ -128,9 +131,18 @@ def train() -> dict[str, float]:
         greater_is_better=True,
         seed=SEED,
         report_to=[],
+        max_grad_norm=1.0,
+    )
+
+    optimiser = torch.optim.SGD(
+        model.parameters(),
+        lr=SGD_LEARNING_RATE,
+        momentum=SGD_MOMENTUM,
+        weight_decay=WEIGHT_DECAY,
     )
 
     trainer = Trainer(
+        optimizers=(optimiser, None),
         model=model,
         args=arguments,
         train_dataset=datasets['train'],
