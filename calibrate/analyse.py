@@ -391,17 +391,27 @@ def non_wire_contrast(
 
     for period in REPORTED_PERIODS:
         cell = editorial[editorial['period'] == period]
-        logger.info('%s: non_wire / %s (n=%d)', detector, period, len(cell))
-        row = contrast(cell, 'all', score_column, detector, period, resamples)
-        row.update(
-            {
-                'family': 'sensitivity',
-                'view': 'non_wire',
-                'outlet': '(category)',
-                'is_primary': False,
-            }
-        )
-        records.append(row)
+        slices = [('all', cell)]
+        if period == PRIMARY_PERIOD:
+            slices += [
+                (f'year_{year}', cell[cell['year'] == year])
+                for year in sorted(cell['year'].unique())
+            ]
+        for scope, slice_rows in slices:
+            logger.info(
+                '%s: non_wire / %s %s (n=%d)', detector, period, scope, len(slice_rows)
+            )
+            row = contrast(slice_rows, scope, score_column, detector, period, resamples)
+            row.update(
+                {
+                    'family': 'sensitivity',
+                    'view': 'non_wire',
+                    'outlet': '(category)',
+                    'is_primary': False,
+                }
+            )
+            records.append(row)
+
     return records
 
 
@@ -425,15 +435,31 @@ def outlet_contrast(
     for outlet in OUTLETS:
         rows = corpus[corpus['outlet'] == outlet]
         post = rows[rows['period'] == PRIMARY_PERIOD]
-        own_pre = rows.loc[rows['period'] == 'pre', score_column].to_numpy(float)
+        pre = rows[rows['period'] == 'pre']
 
-        slices = [('post_all', post)]
+        slices = [('post_all', post, pre)]
         slices += [
-            (f'year_{year}', post[post['year'] == year])
+            (f'year_{year}', post[post['year'] == year], pre)
             for year in sorted(post['year'].unique())
         ]
-        for scope, slice_rows in slices:
+
+        for low, high in LENGTH_BANDS:
+            band = band_label(low)
+            post_band = post[(post['word_count'] >= low) & (post['word_count'] < high)]
+            pre_band = pre[(pre['word_count'] >= low) & (pre['word_count'] < high)]
+            slices.append((f'band_{band}', post_band, pre_band))
+            slices += [
+                (
+                    f'band_{band}_year_{year}',
+                    post_band[post_band['year'] == year],
+                    pre_band,
+                )
+                for year in sorted(post_band['year'].unique())
+            ]
+
+        for scope, slice_rows, baseline_rows in slices:
             logger.info('%s: %s %s (n=%d)', detector, outlet, scope, len(slice_rows))
+            own_pre = baseline_rows[score_column].to_numpy(float)
             slice_scores = slice_rows[score_column].to_numpy(float)
             delta, ci_low, ci_high = delta_ci(slice_scores, own_pre, resamples=resamples)
             records.append(
