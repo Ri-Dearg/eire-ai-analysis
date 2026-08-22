@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -16,6 +17,33 @@ DETECTORS = ('fastdetectgpt', 'binoculars', 'perplexity', 'radar')
 MIN_WORDS = 100
 
 csv.field_size_limit(1 << 24)
+
+
+def _trim_file(path: Path, *, dry_run: bool) -> tuple[set[str], dict[str, int]]:
+    """Trim one generated CSV in place and report which ids changed.
+
+    Args:
+        path (Path): A ``generated_*.csv``.
+        dry_run (bool): If True, compute and report but write nothing.
+
+    Returns:
+        tuple[set[str], dict[str, int]]: Ids whose text changed or were dropped, and a
+        counts dict for reporting.
+
+    """
+    with path.open(encoding='utf-8') as fh:
+        reader = csv.DictReader(fh)
+        fields = reader.fieldnames or []
+        rows = list(reader)
+
+    changed: set[str] = set()
+    kept: list[dict[str, str]] = []
+    lost: list[int] = []
+    stats = {'rows': len(rows), 'trimmed': 0, 'no_sentence': 0, 'too_short': 0}
+
+    for row in rows:
+        original = row['text']
+        body = original
 
 
 def main(argv: list[str]) -> int:
