@@ -7,6 +7,7 @@ import csv
 import html
 import json
 import random
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -163,6 +164,37 @@ def main(argv: list[str]) -> int:
         return 1
 
     sample = _stratified_ids(args.per_cell)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(f'file:{DB_PATH}?mode=ro', uri=True)
+    written = skipped = 0
+    seen: set[str] = set()
+    with OUT_CSV.open('w', newline='', encoding='utf-8') as fh:
+        writer = csv.writer(fh)
+        writer.writerow(['prompt_id', 'outlet', 'period', 'section', 'headline'])
+        for i, row in enumerate(sample):
+            cur = con.execute(
+                'SELECT raw_html FROM raw_page WHERE article_id = ?', (row['article_id'],)
+            )
+            hit = cur.fetchone()
+            head = _headline(hit[0]) if hit and hit[0] else ''
+            key = head.lower()
+            if len(head) < MIN_HEADLINE_CHARS or key in seen:
+                skipped += 1
+                continue
+            seen.add(key)
+            writer.writerow(
+                [f'p{i:04d}', row['outlet'], row['period'], row['section'], head]
+            )
+            written += 1
+    con.close()
+    print(
+        f'wrote {written} headline prompts -> {OUT_CSV} '
+        f'({skipped} skipped: missing/short/dup)'
+    )
+    print(
+        'NOTE: this file is headlines only (no bodies). Inspect, then upload '
+        'it to Colab for generation.'
+    )
     return 0
 
 
