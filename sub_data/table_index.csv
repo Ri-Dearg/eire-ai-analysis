@@ -1,0 +1,27 @@
+reported_in,what_it_reports,source_file,how_to_reproduce_it,submitted_or_repo
+Table 4.1,components and versions,requirements.txt,the fourteen pinned packages named in the table,submitted
+Table 4.6,sensitivity on the NYT-register set,analysis_outputs/calibration_report.csv,"tpr_* columns, pooled over the six generators",repository
+Table 5.1,ensemble sensitivity under the two candidate rules,analysis_outputs/rule_comparison_fpr5.csv,period='post',repository
+Table 5.2,pre-period detected rate against the anchor rate,"analysis_outputs/sanity_pre_fpr_fpr1.csv, sanity_pre_fpr_fpr5.csv",all rows,repository
+Table 5.3,"Fast-DetectGPT by length band, POST",analysis_outputs/primary_effects.csv,"family='category', view='raw', scope startswith 'band_'",submitted
+Table 5.4,the same test on the PRE period,analysis_outputs/primary_effects.csv,"family='category', period='pre'",submitted
+Table 5.5,Cliff's delta by year,analysis_outputs/primary_effects.csv,"family='category', scope startswith 'year_'",submitted
+Table 5.6,2026 against each outlet's own pre-period baseline,analysis_outputs/primary_effects.csv,"family='outlet', view='own_pre', scope='band_300-600_year_2026'",submitted
+Table 5.7,minimum detectable machine-generated fraction,analysis_outputs/tpr_irish_register.csv,"detector='ensemble_majority', outlet='(all)'",submitted
+Table 5.8,lower bound on machine-generated share,analysis_outputs/headline_adjusted_fpr1.csv,view='all'; the 5% check is the fpr5 file,submitted
+Table 5.9,classifier recall by generator,analysis_outputs/crossval_report.csv,scope startswith 'recall:',submitted
+Table 5.10,classifier flag rate by outlet and year,analysis_outputs/corpus_prevalence_report.csv,"model='tfidf', scope='trajectory', fpr_target=0.01",submitted
+Table 5.11,"The Liberal, production indicators",analysis_outputs/production_evidence.csv,outlet='the_liberal',submitted
+Figure 4.1,corpus construction funnel,corpus_metadata/parsed_index.csv,counts by drop_reason,submitted
+Figure 5.1-5.3,"corpus composition, length, wire share",corpus_metadata/corpus_scored.csv,"group by outlet, period, year",submitted
+Figure 5.4-5.5,score distributions and detector correlation,corpus_metadata/corpus_scored.csv,the four *_score columns,submitted
+Figure 5.6,"delta by year, three detectors",analysis_outputs/primary_effects.csv,"family='category', scope startswith 'year_'",submitted
+Figure 5.7,four-outlet trajectory,analysis_outputs/primary_effects.csv,"family='outlet', view='own_pre'",submitted
+Figure 5.8,the ladder: delta_AI and ensemble sensitivity,analysis_outputs/tpr_irish_register.csv,plus delta_AI recomputed from generation_ladder/,submitted
+Figure 5.9,"recall by generator, classifier against ensemble",analysis_outputs/crossval_report.csv,with tpr_irish_register.csv for the ensemble series,submitted
+Figure 5.10,classifier flag rate by year,analysis_outputs/corpus_prevalence_report.csv,scope='trajectory',submitted
+Figure 5.11,The Liberal production and flag rate,analysis_outputs/production_evidence.csv,with corpus_prevalence_report.csv,submitted
+5.12 prose,classifier F1 and anchor false-positive rates,analysis_outputs/crossval_report.csv,scope='overall' and 'false_positive_rate:anchor',submitted
+5.12 prose,"classifier on pre-ChatGPT corpus, 4.94%",analysis_outputs/corpus_fpr_report.csv,"model='tfidf', scope='overall'",repository
+5.12 caveat,length-matched refit,analysis_outputs/length_control_report.csv,all rows,repository
+"5.11, 5.15",short band not estimable,analysis_outputs/tpr_by_band.csv,"band='0-150', estimable=False",repository
