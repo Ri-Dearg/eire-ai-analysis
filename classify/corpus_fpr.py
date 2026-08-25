@@ -268,3 +268,72 @@ def summarise(corpus: pd.DataFrame, predicted: np.ndarray, kind: str) -> list[di
             }
         )
     return rows
+
+
+def main() -> int:
+    """Score both classifiers on the PRE corpus cell and write the report.
+
+    Returns:
+        int: 0 on success, 1 if inputs are missing.
+
+    """
+    try:
+        train = load_training_frame()
+        corpus = load_pre_corpus()
+    except FileNotFoundError:
+        logger.exception('missing input')
+        return 1
+
+    records: list[dict] = []
+    for kind in MODELS:
+        kind = kind.strip()
+        if kind not in {'tfidf', 'frozen'}:
+            logger.warning('unknown model %r, skipping', kind)
+            continue
+        logger.info('scoring PRE corpus with %s', kind)
+        proba = probabilities(train, corpus, kind)
+        records.extend(summarise(corpus, (proba >= GLOBAL_BOUNDARY).astype(int), kind))
+        records.extend(outlet_thresholds(corpus, proba, kind))
+
+    if not records:
+        logger.error('no models run; set CORPUS_FPR_MODEL')
+        return 1
+
+    report = pd.DataFrame(records)
+    report.to_csv(REPORT, index=False)
+
+    for kind in report['model'].unique():
+        subset = report[report['model'] == kind]
+        overall = subset[subset['scope'] == 'overall']['false_positive_rate'].iloc[0]
+        logger.info('%s: PRE-corpus false-positive rate %.4f', kind, overall)
+        for row in subset[subset['scope'] == 'outlet'].itertuples():
+            logger.info(
+                '    %-16s %.4f  (n=%d)', row.outlet, row.false_positive_rate, row.n
+            )
+        for row in subset[subset['scope'] == 'band'].itertuples():
+            logger.info(
+                '    band %-11s %.4f  (n=%d)', row.band, row.false_positive_rate, row.n
+            )
+        thresholds = subset[subset['scope'] == 'outlet_threshold']
+        if not thresholds.empty:
+            logger.info(
+                '  per-outlet thresholds at a common %.0f%% FPR:', FPR_TARGET * 100
+            )
+            for row in thresholds.itertuples():
+                logger.info(
+                    '    %-16s threshold %.3f  (global 0.5 gives %.4f)',
+                    row.outlet,
+                    row.threshold,
+                    row.fpr_at_global_boundary,
+                )
+    logger.info('wrote %s', REPORT.name)
+    return 0
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
+    sys.exit(main())
