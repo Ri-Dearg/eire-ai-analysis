@@ -140,6 +140,36 @@ def _trim_file(path: Path, *, dry_run: bool) -> tuple[set[str], dict[str, int]]:
     return changed, stats
 
 
+def _purge(path: Path, ids: set[str], *, dry_run: bool) -> int:
+    """Drop rows whose id is in ``ids`` from a detector checkpoint.
+
+    Only ids whose *text changed* are purged. A row whose body was already clean has
+    byte-identical text, so its score is still valid and re-scoring it would be waste.
+
+    Args:
+        path (Path): A ``data/detection/<detector>.csv``.
+        ids (set[str]): Ids to remove.
+        dry_run (bool): If True, count but do not write.
+
+    Returns:
+        int: How many rows were (or would be) removed.
+
+    """
+    if not path.exists():
+        return 0
+    with path.open(encoding='utf-8') as fh:
+        reader = csv.reader(fh)
+        header = next(reader)
+        keep = [row for row in reader if row[0] not in ids]
+    removed = sum(1 for _ in path.open(encoding='utf-8')) - 1 - len(keep)
+    if not dry_run and removed:
+        with path.open('w', newline='', encoding='utf-8') as fh:
+            writer = csv.writer(fh)
+            writer.writerow(header)
+            writer.writerows(keep)
+    return removed
+
+
 def main(argv: list[str]) -> int:
     """Trim the generated set and purge the scores of every row that changed.
 
