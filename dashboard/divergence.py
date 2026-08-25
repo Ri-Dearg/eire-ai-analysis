@@ -39,9 +39,6 @@ def _load(path: Path) -> pd.DataFrame | None:
 def _years(frame: pd.DataFrame) -> pd.DataFrame:
     """Keep the rows whose ``year`` is a calendar year, typed as an int.
 
-    The ``year`` column doubles as a period label elsewhere in the same table -- it
-    holds values like ``post_all`` -- so it arrives as an object column.
-
     Args:
         frame (pd.DataFrame): Rows from the prevalence report.
 
@@ -52,3 +49,21 @@ def _years(frame: pd.DataFrame) -> pd.DataFrame:
     out = frame.copy()
     out['year'] = pd.to_numeric(out['year'], errors='coerce')
     return out.dropna(subset=['year']).astype({'year': int})
+
+
+def _scope(report: pd.DataFrame, scope: str, filters: Filters) -> pd.DataFrame:
+    """Select one scope from the prevalence report, honouring the sidebar.
+
+    Args:
+        report (pd.DataFrame): ``corpus_prevalence_report.csv``.
+        scope (str): The scope to select.
+        filters (Filters): The active filter state.
+
+    Returns:
+        pd.DataFrame: The selected rows.
+
+    """
+    rows = report[
+        (report['scope'] == scope) & (report['fpr_target'] == filters.fpr_target)
+    ]
+    return rows[rows['outlet'].isin(filters.outlets)]
