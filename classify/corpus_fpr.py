@@ -142,3 +142,36 @@ def embed(texts: list[str]) -> np.ndarray:
             if start % (BATCH_SIZE * 100) == 0:
                 logger.info('  encoded %d/%d', start, len(texts))
     return np.vstack(out)
+
+
+def probabilities(train: pd.DataFrame, corpus: pd.DataFrame, kind: str) -> np.ndarray:
+    """Return P(AI) for every PRE-corpus row.
+
+    Args:
+        train (pd.DataFrame): Pooled training rows.
+        corpus (pd.DataFrame): Harmonised PRE corpus rows.
+        kind (str): ``'tfidf'`` or ``'frozen'``.
+
+    Returns:
+        np.ndarray: Probability of the AI class, one per corpus row.
+
+    """
+    train_text = train['text'].astype(str).tolist()
+    corpus_text = corpus['text'].astype(str).tolist()
+
+    if kind == 'frozen':
+        logger.info('encoding %d training rows', len(train_text))
+        x_train = embed(train_text)
+        logger.info('encoding %d corpus rows -- this is the slow part', len(corpus_text))
+        x_corpus = embed(corpus_text)
+        model = LogisticRegression(max_iter=2000, random_state=SEED)
+        model.fit(x_train, train['label'])
+    else:
+        model = make_pipeline(
+            TfidfVectorizer(max_features=50_000, ngram_range=(1, 2), sublinear_tf=True),
+            LogisticRegression(max_iter=2000, random_state=SEED),
+        ).fit(train_text, train['label'])
+        x_corpus = corpus_text
+
+    ai_column = list(model.classes_).index(AI_LABEL)
+    return model.predict_proba(x_corpus)[:, ai_column]
