@@ -175,3 +175,37 @@ def probabilities(train: pd.DataFrame, corpus: pd.DataFrame, kind: str) -> np.nd
 
     ai_column = list(model.classes_).index(AI_LABEL)
     return model.predict_proba(x_corpus)[:, ai_column]
+
+
+def outlet_thresholds(
+    corpus: pd.DataFrame, proba: np.ndarray, kind: str, target: float = FPR_TARGET
+) -> list[dict]:
+    """Return the per-outlet decision threshold giving a common false-positive rate.
+
+    Args:
+        corpus (pd.DataFrame): Harmonised PRE corpus rows, with ``outlet``.
+        proba (np.ndarray): P(AI) per row, aligned to ``corpus``.
+        kind (str): Model label for the report.
+        target (float): Common false-positive rate to calibrate to.
+
+    Returns:
+        list[dict]: One record per outlet.
+
+    """
+    frame = corpus.assign(p_ai=proba)
+    records = []
+    for outlet, cell in frame.groupby('outlet', sort=True):
+        threshold = float(np.quantile(cell['p_ai'], 1.0 - target, method='higher'))
+        records.append(
+            {
+                'model': kind,
+                'scope': 'outlet_threshold',
+                'outlet': outlet,
+                'band': '(all)',
+                'n': len(cell),
+                'false_positive_rate': float((cell['p_ai'] >= threshold).mean()),
+                'threshold': threshold,
+                'fpr_at_global_boundary': float((cell['p_ai'] >= GLOBAL_BOUNDARY).mean()),
+            }
+        )
+    return records
