@@ -209,3 +209,62 @@ def outlet_thresholds(
             }
         )
     return records
+
+
+def summarise(corpus: pd.DataFrame, predicted: np.ndarray, kind: str) -> list[dict]:
+    """Return false-positive rates overall, per outlet, per band and per outlet x band.
+
+    Args:
+        corpus (pd.DataFrame): Harmonised PRE corpus rows.
+        predicted (np.ndarray): Predicted labels, aligned to ``corpus``.
+        kind (str): Model label for the report.
+
+    Returns:
+        list[dict]: One record per scope.
+
+    """
+    frame = corpus.assign(flagged=(predicted == AI_LABEL))
+    rows = [
+        {
+            'model': kind,
+            'scope': 'overall',
+            'outlet': '(all)',
+            'band': '(all)',
+            'n': len(frame),
+            'false_positive_rate': float(frame['flagged'].mean()),
+        }
+    ]
+    for outlet, cell in frame.groupby('outlet', sort=True):
+        rows.append(
+            {
+                'model': kind,
+                'scope': 'outlet',
+                'outlet': outlet,
+                'band': '(all)',
+                'n': len(cell),
+                'false_positive_rate': float(cell['flagged'].mean()),
+            }
+        )
+    for band, cell in frame.groupby('band', sort=True):
+        rows.append(
+            {
+                'model': kind,
+                'scope': 'band',
+                'outlet': '(all)',
+                'band': band,
+                'n': len(cell),
+                'false_positive_rate': float(cell['flagged'].mean()),
+            }
+        )
+    for (outlet, band), cell in frame.groupby(['outlet', 'band'], sort=True):
+        rows.append(
+            {
+                'model': kind,
+                'scope': 'outlet_band',
+                'outlet': outlet,
+                'band': band,
+                'n': len(cell),
+                'false_positive_rate': float(cell['flagged'].mean()),
+            }
+        )
+    return rows
