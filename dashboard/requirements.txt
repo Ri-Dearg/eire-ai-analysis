@@ -1,0 +1,6 @@
+# Dashboard-only dependencies.
+streamlit>=1.36
+pandas>=2.2
+numpy>=1.26
+matplotlib>=3.8
+jinja2>=3.1
