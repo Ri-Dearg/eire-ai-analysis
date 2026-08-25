@@ -151,3 +151,87 @@ def cross_validate(frame: pd.DataFrame, kind: str) -> pd.Series:
             '  %s fold %d/%d done (%d held out)', kind, fold, FOLDS, len(test_idx)
         )
     return pd.Series(predicted, index=frame.index)
+
+
+def _interval(successes: int, total: int) -> tuple[float, float]:
+    """Return a Wilson confidence interval for a proportion.
+
+    Args:
+        successes (int): Number of positive outcomes.
+        total (int): Number of trials.
+
+    Returns:
+        tuple[float, float]: Lower and upper bound.
+
+    """
+    if total == 0:
+        return (float('nan'), float('nan'))
+    low, high = proportion_confint(successes, total, alpha=CONFIDENCE, method='wilson')
+    return (float(low), float(high))
+
+
+def report(
+    frame: pd.DataFrame, predicted: pd.Series, kind: str
+) -> list[dict[str, object]]:
+    """Return per-generator recall rows with intervals.
+
+    Args:
+        frame (pd.DataFrame): Pooled rows.
+        predicted (pd.Series): Out-of-fold predictions.
+        kind (str): Model name, recorded in each row.
+
+    Returns:
+        list[dict[str, object]]: One row per scope.
+
+    """
+    from sklearn.metrics import precision_recall_fscore_support
+
+    precision, recall, f1, _unused = precision_recall_fscore_support(
+        frame['label'], predicted, average='binary', pos_label=AI_LABEL, zero_division=0
+    )
+    rows: list[dict[str, object]] = [
+        {
+            'model': kind,
+            'scope': 'overall',
+            'n': len(frame),
+            'rate': f1,
+            'ci_low': float('nan'),
+            'ci_high': float('nan'),
+            'precision': precision,
+            'recall': recall,
+        }
+    ]
+
+    ai = frame[frame['label'] == AI_LABEL]
+    for name, group in ai.groupby('model'):
+        hits = int((predicted[group.index] == AI_LABEL).sum())
+        low, high = _interval(hits, len(group))
+        rows.append(
+            {
+                'model': kind,
+                'scope': f'recall:{name}',
+                'n': len(group),
+                'rate': hits / len(group),
+                'ci_low': low,
+                'ci_high': high,
+                'precision': float('nan'),
+                'recall': float('nan'),
+            }
+        )
+
+    human = frame[frame['label'] == HUMAN_LABEL]
+    hits = int((predicted[human.index] == AI_LABEL).sum())
+    low, high = _interval(hits, len(human))
+    rows.append(
+        {
+            'model': kind,
+            'scope': 'false_positive_rate:anchor',
+            'n': len(human),
+            'rate': hits / len(human),
+            'ci_low': low,
+            'ci_high': high,
+            'precision': float('nan'),
+            'recall': float('nan'),
+        }
+    )
+    return rows
