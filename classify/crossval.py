@@ -235,3 +235,50 @@ def report(
         }
     )
     return rows
+
+
+def main() -> int:
+    """Cross-validate every configured model and write the combined report.
+
+    Returns:
+        int: 0 on success, 1 if the splits are missing.
+
+    """
+    try:
+        frame = load_all()
+    except FileNotFoundError:
+        logger.exception('missing input')
+        return 1
+
+    rows: list[dict[str, object]] = []
+    for kind in MODELS:
+        logger.info('cross-validating %s over %d folds', kind, FOLDS)
+        rows += report(frame, cross_validate(frame, kind), kind)
+
+    output = pd.DataFrame(rows)
+    output.to_csv(REPORT, index=False)
+
+    for kind in MODELS:
+        subset = output[output['model'] == kind]
+        overall = subset[subset['scope'] == 'overall'].iloc[0]
+        logger.info('%s  F1 = %.4f', kind, overall['rate'])
+        for row in subset[subset['scope'] != 'overall'].itertuples():
+            logger.info(
+                '  %-32s %.4f  [%.3f, %.3f]  n=%d',
+                row.scope,
+                row.rate,
+                row.ci_low,
+                row.ci_high,
+                row.n,
+            )
+    logger.info('wrote %s', REPORT.name)
+    return 0
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
+    sys.exit(main())
