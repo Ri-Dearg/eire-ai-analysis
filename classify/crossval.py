@@ -113,3 +113,41 @@ def _embed(texts: list[str]) -> np.ndarray:
             if start % (BATCH_SIZE * 50) == 0:
                 logger.info('  encoded %d/%d', start, len(texts))
     return np.vstack(out)
+
+
+def cross_validate(frame: pd.DataFrame, kind: str) -> pd.Series:
+    """Return an out-of-fold prediction for every row.
+
+    Args:
+        frame (pd.DataFrame): Pooled rows.
+        kind (str): ``'tfidf'`` or ``'frozen'``.
+
+    Returns:
+        pd.Series: Predicted label per row, aligned to ``frame``.
+
+    """
+    texts = frame['text'].astype(str).tolist()
+    features = _embed(texts) if kind == 'frozen' else None
+
+    predicted = np.zeros(len(frame), dtype=int)
+    splitter = StratifiedGroupKFold(n_splits=FOLDS, shuffle=True, random_state=SEED)
+    for fold, (train_idx, test_idx) in enumerate(
+        splitter.split(frame, frame['label'], _groups(frame)), start=1
+    ):
+        if kind == 'frozen':
+            model = LogisticRegression(max_iter=2000, random_state=SEED)
+            model.fit(features[train_idx], frame['label'].to_numpy()[train_idx])
+            predicted[test_idx] = model.predict(features[test_idx])
+        else:
+            model = make_pipeline(
+                TfidfVectorizer(
+                    max_features=50_000, ngram_range=(1, 2), sublinear_tf=True
+                ),
+                LogisticRegression(max_iter=2000, random_state=SEED),
+            )
+            model.fit([texts[i] for i in train_idx], frame['label'].to_numpy()[train_idx])
+            predicted[test_idx] = model.predict([texts[i] for i in test_idx])
+        logger.info(
+            '  %s fold %d/%d done (%d held out)', kind, fold, FOLDS, len(test_idx)
+        )
+    return pd.Series(predicted, index=frame.index)
