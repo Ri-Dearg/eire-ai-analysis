@@ -83,3 +83,62 @@ def load_training_frame() -> pd.DataFrame:
         int((frame['label'] == AI_LABEL).sum()),
     )
     return frame
+
+
+def load_pre_corpus() -> pd.DataFrame:
+    """Return the PRE corpus cell, harmonised in memory.
+
+    Returns:
+        pd.DataFrame: One row per PRE article with a harmonised ``text`` column.
+
+    Raises:
+        FileNotFoundError: If the corpus is absent.
+
+    """
+    if not CORPUS.exists():
+        message = f'{CORPUS} not found; the corpus is local-only.'
+        raise FileNotFoundError(message)
+
+    frame = pd.read_csv(CORPUS, usecols=list(CORPUS_COLUMNS))
+    frame = frame[frame['period'] == PRE_PERIOD].copy()
+    logger.info('PRE corpus rows: %d', len(frame))
+
+    # Same transformation the classifier was trained under. In memory only.
+    frame['text'] = frame['body_text'].fillna('').map(harmonise)
+    frame['band'] = frame['word_count'].astype(int).map(band_label)
+    frame = frame.drop(columns=['body_text'])
+    return frame[frame['text'].str.strip().astype(bool)].copy()
+
+
+def embed(texts: list[str]) -> np.ndarray:
+    """Return mean-pooled frozen-encoder embeddings, masked over real tokens.
+
+    Args:
+        texts (list[str]): Documents to encode.
+
+    Returns:
+        np.ndarray: One embedding row per document.
+
+    """
+    import torch
+    from transformers import AutoModel, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(ENCODER)
+    model = AutoModel.from_pretrained(ENCODER).eval()  # CPU, inference only
+
+    out = []
+    with torch.no_grad():
+        for start in range(0, len(texts), BATCH_SIZE):
+            batch = tokenizer(
+                texts[start : start + BATCH_SIZE],
+                truncation=True,
+                max_length=MAX_TOKENS,
+                padding=True,
+                return_tensors='pt',
+            )
+            hidden = model(**batch).last_hidden_state
+            mask = batch['attention_mask'].unsqueeze(-1).float()
+            out.append(((hidden * mask).sum(1) / mask.sum(1)).numpy())
+            if start % (BATCH_SIZE * 100) == 0:
+                logger.info('  encoded %d/%d', start, len(texts))
+    return np.vstack(out)
