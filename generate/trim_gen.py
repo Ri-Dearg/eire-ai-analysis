@@ -39,8 +39,6 @@ _BEGORRAH = re.compile(r'^\s*sure and begorrah', re.I)
 def strip_preamble(text: str) -> str:
     """Remove a leading conversational wrapper line from a generated body.
 
-    A no-op on text that has none, so the script stays safe to re-run.
-
     Args:
         text (str): Generated article body.
 
@@ -68,9 +66,6 @@ def ends_clean(text: str) -> bool:
 
 def trim_to_sentence(text: str) -> str:
     """Trim a body back to its last complete sentence.
-
-    A no-op on text that already ends cleanly, which makes the whole script safe to
-    re-run over a file it has already processed.
 
     Args:
         text (str): Article body, possibly cut off mid-sentence.
@@ -143,9 +138,6 @@ def _trim_file(path: Path, *, dry_run: bool) -> tuple[set[str], dict[str, int]]:
 def _purge(path: Path, ids: set[str], *, dry_run: bool) -> int:
     """Drop rows whose id is in ``ids`` from a detector checkpoint.
 
-    Only ids whose *text changed* are purged. A row whose body was already clean has
-    byte-identical text, so its score is still valid and re-scoring it would be waste.
-
     Args:
         path (Path): A ``data/detection/<detector>.csv``.
         ids (set[str]): Ids to remove.
@@ -199,6 +191,31 @@ def main(argv: list[str]) -> int:
                 shutil.copy2(path, backup / path.name)  # copy, never move
         print(f'backed up {len(list(backup.iterdir()))} files -> {backup}\n')
 
+    all_changed: set[str] = set()
+    for path in paths:
+        changed, st = _trim_file(path, dry_run=args.dry_run)
+        all_changed |= changed
+        print(
+            f'{path.name}: {st["rows"]:,} rows -> trimmed {st["trimmed"]:,} '
+            f'(mean {st["words_lost_mean"]}w lost, median {st["words_lost_median"]}w), '
+            f'dropped {st["dropped"]} ({st["no_sentence"]} with no sentence boundary, '
+            f'{st["too_short"]} under {MIN_WORDS}w)'
+        )
+
+    if not all_changed:
+        print('\nnothing changed -- already trimmed. No scores purged.')
+        return 0
+
+    print(f'\n{len(all_changed):,} ids changed; purging their scores so they re-score:')
+    for name in DETECTORS:
+        removed = _purge(DET_DIR / f'{name}.csv', all_changed, dry_run=args.dry_run)
+        print(f'  {name:<14} {removed:,} scores removed')
+
+    verb = 'would be' if args.dry_run else 'is'
+    print(
+        f'\nRows whose text was unchanged keep their scores, so only what changed {verb} '
+        f'recomputed.\nNext: python -m detect.score_gen --dry-run   (then run it for real)'
+    )
     return 0
 
 
