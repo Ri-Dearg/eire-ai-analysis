@@ -39,3 +39,47 @@ MAX_TOKENS = 256
 BATCH_SIZE = 16
 # Columns read from the corpus. body_text is the only large one; nothing else is needed.
 CORPUS_COLUMNS = ('article_id', 'outlet', 'period', 'word_count', 'body_text')
+
+
+def band_label(word_count: int, bands: tuple = LENGTH_BANDS) -> str:
+    """Return the length-band label for a word count.
+
+    Args:
+        word_count (int): Words in the article.
+        bands (tuple): ``(low, high)`` pairs, half-open.
+
+    Returns:
+        str: Band label, or ``'unbanded'`` if no band matches.
+
+    """
+    for low, high in bands:
+        if low <= word_count < high:
+            return f'{low}-{"inf" if high >= 10**9 else high}'
+    return 'unbanded'
+
+
+def load_training_frame() -> pd.DataFrame:
+    """Return the three classifier splits concatenated.
+
+    Returns:
+        pd.DataFrame: Pooled training rows.
+
+    Raises:
+        FileNotFoundError: If the splits have not been built.
+
+    """
+    parts = []
+    for name in ('train', 'validation', 'test'):
+        path = SPLIT_DIR / f'{name}.csv'
+        if not path.exists():
+            message = f'{path} not found; run classify.dataset first.'
+            raise FileNotFoundError(message)
+        parts.append(pd.read_csv(path))
+    frame = pd.concat(parts, ignore_index=True)
+    logger.info(
+        'training rows: %d (%d human / %d AI)',
+        len(frame),
+        int((frame['label'] != AI_LABEL).sum()),
+        int((frame['label'] == AI_LABEL).sum()),
+    )
+    return frame
