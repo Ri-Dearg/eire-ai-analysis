@@ -64,3 +64,52 @@ def load_all() -> pd.DataFrame:
         frame.loc[frame['label'] == AI_LABEL, 'model'].nunique(),
     )
     return frame
+
+
+def _groups(frame: pd.DataFrame) -> np.ndarray:
+    """Return a grouping key that keeps one headline's generations together.
+
+    Args:
+        frame (pd.DataFrame): Pooled rows.
+
+    Returns:
+        np.ndarray: Group label per row.
+
+    """
+    prompt = frame['prompt_id'].fillna('').astype(str)
+    # Anchor rows share no source, so each becomes its own group via its unique id.
+    return np.where(prompt == '', 'anchor:' + frame['id'].astype(str), 'prompt:' + prompt)
+
+
+def _embed(texts: list[str]) -> np.ndarray:
+    """Return mean-pooled frozen-encoder embeddings.
+
+    Args:
+        texts (list[str]): Documents to encode.
+
+    Returns:
+        np.ndarray: One embedding row per document.
+
+    """
+    import torch
+    from transformers import AutoModel, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(ENCODER)
+    model = AutoModel.from_pretrained(ENCODER).eval()  # CPU, inference only
+
+    out = []
+    with torch.no_grad():
+        for start in range(0, len(texts), BATCH_SIZE):
+            batch = tokenizer(
+                texts[start : start + BATCH_SIZE],
+                truncation=True,
+                max_length=MAX_TOKENS,
+                padding=True,
+                return_tensors='pt',
+            )
+            hidden = model(**batch).last_hidden_state
+            mask = batch['attention_mask'].unsqueeze(-1).float()
+            out.append(((hidden * mask).sum(1) / mask.sum(1)).numpy())
+            if start % (BATCH_SIZE * 50) == 0:
+                logger.info('  encoded %d/%d', start, len(texts))
+    return np.vstack(out)
