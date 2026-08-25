@@ -4,6 +4,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.15.0] - 2026-08-25
+### :sparkles: New Features
+- [`dc5a2a8`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/dc5a2a8bd145c51c388737f1fe694107a41aed06) - **classify**: 🚧 add classify module *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`45f0244`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/45f024426c3bde3e018f7fbebf5fb06ba1ce6667) - **classify**: 🚧 add read ai file *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`72c00db`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/72c00db1ee51c66acd7afd822e38af96537e9b31) - **classify**: 🚧 add prompt labels *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`95364d2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/95364d23136f0849c5850b5c36b42f3257b195c7) - **classify**: 🚧 build file from prompts *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`99ebe89`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/99ebe899f25d7bc1622e7409d02cb3f91d95abff) - **classify**: ✨ basic classify model *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`bc49619`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bc4961928153b5ea60c467760a5f453de94018be) - **classify**: 🚧 create training file *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a33368b`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a33368b8cf4b6919705cec7cffb4a8b3c353232c) - **classify**: 🚧 add trainer *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`5633d5f`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/5633d5f1f85726edec5554703a4eb7d394cc0c1d) - **classify**: 🚧 load split *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`df8500a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/df8500a5d0c9ceb858a8942f91139e6363db8bb1) - **classify**: 🚧 being training settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`280589e`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/280589e418c6727f024f6bb8ceaf03530ed0fb80) - **classify**: 🚧 add metric calcs *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`dbe5429`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/dbe5429ee673b91e4c326d090de3ec475bf135b8) - **classify**: ✨ add train function *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3d61b25`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/3d61b25a33cf8845caa378f58b138a8192052702) - **classify**: 🚧 evaluate model *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a594cba`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a594cbafb1de0e6b398c500bc44adaaf8e39e09f) - **classify**: ✨ test prediction *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`9b8e771`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9b8e771b6a174e0f183abaa87c36fddd22485e54) - **classify**: ✨ add evaluatoin fucntion *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3513b80`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/3513b800ae476295f12ada6341c9cfc938872b85) - **data**: 🧐 add datasets *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`b6bcb60`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/b6bcb601104987742cc9b983567b7638b9b0e64c) - **generate**: 🚧 start code for colab ai gen *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3083273`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/308327331f59259fa5fa51a463e046cacb92c0ab) - **generate**: ✨ huggingface login *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`9a8354a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9a8354aceba00e8f132f9583d9af362c383b9194) - **generate**: 🚧 add file upload *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`933df77`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/933df772756cba4d850b746d2ad66aaf205f12e7) - **generate**: 🚧 create trim_gen.py *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`04bc3e1`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/04bc3e118b331a514622b0c9db72dbc3166eb39c) - **generate**: 🚧 add trim function *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`8207de2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/8207de21d09dcbd1d08a28862b1d4b907fe55c33) - **board**: ✨ add data cache *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`26e953c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/26e953cf2c6895d0c9cef1dbbd2aa61aec360b66) - **board**: ✨ add scope *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`4276f82`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/4276f824ba4d0380fbaeea532e647c049922353c) - **board**: ✨ add trajectory *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`5c43a67`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/5c43a677907998bc8f5be2fc433370a5dff922ec) - **classify**: ✨ add tf idf baselin calc *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`7fd69a0`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/7fd69a089e51f32e51400fbf1b2c384279cc02a1) - **classify**: 🚧 add distilbert settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`4b667d5`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/4b667d52aaa5bb01dc2d908a6cf8eac232cd7b6a) - **classify**: 🚧 add embed for distilbert *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`4aab2ca`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/4aab2caa2dae8e1676ffda0fc25c4f5595db6666) - **classify**: ✨ add distil main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`f5777b3`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/f5777b30415e7d4370700089e4658b00fd087d2e) - **classify**: 🚧 add crossval settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`84f0b03`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/84f0b03d4eddf1b677cac5380ba19ea7a10e4a13) - **classify**: 🚧 load files *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`090e6b2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/090e6b2bb4ee2c0c78421d45799e7b38210a0358) - **classify**: 🚧 add embeds and groups *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`c599e87`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c599e87493f3d64482fb14409e82e9857bc6c0c7) - **classify**: 🚧 add crossvalidaton func *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`cd1bf51`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/cd1bf512da36ca5d54544a744f25827885ab9bcc) - **classify**: 🚧 add crossval report *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`f656403`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/f65640368a92db61464228ca5066ed278490080c) - **classify**: ✨ add crossval main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`e4ede85`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/e4ede854a20d5fe017f1ced14353f39ca6211b8e) - **classify**: 🚧 add fpr file *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`8c409e1`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/8c409e1281b02b265c6dc2033148af4bd4403ce7) - **classify**: ✨ add corpus training frame *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`1a32ab5`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/1a32ab5861393fd5a832c8327f6a55384f9050da) - **classify**: 🚧 load corpus *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`bdc8e45`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/bdc8e45e08f67c0866d329118a28e67d64cf076a) - **classify**: 🚧 add probability pipeline *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`5f4a5a7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/5f4a5a784f451cbcd85de32ff749a4ba2d265086) - **classify**: 🚧 calc thresholds *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`fd0dce3`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/fd0dce37bdd0b90c00c05bb6f6458967e5107f3c) - **classify**: 🚧 add result summary *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`56db762`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/56db762a7e3a381a99b53332cf536e8dc29805ec) - **classify**: ✨ add fpr main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`dd30ca7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/dd30ca7ab52d88ae079b9f6e34f5c86727ca2f41) - **generate**: ✨ add text trim *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`7283013`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/7283013f5742e761b3246b1e4d4d6f18efe08b72) - **generate**: 🚧 add purge for ids already done *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`20a67dc`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/20a67dcacfd8aeba185aca04b83de3458fc62265) - **generate**: ✨ finish main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`7193db4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/7193db44a82a4259df4ca712737d4a78464ebce4) - **detect**: 🚧 add score human settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`52f86df`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/52f86dfc3e689c48f51e1b61d0386d7e266bb27c) - **detect**: 🚧 add human frame *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`ea9e578`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/ea9e5783326d3432703a0e49f730f8d4c9744330) - **detect**: 🚧 add ai frame *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`211d806`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/211d80657cee21d84388f9ddc2638ba0152a63f3) - **detect**: ✨ add main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`fc504a7`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/fc504a7f8708d0234d50bf208aa867c0a25e6d44) - **detect**: ✨ add score gen settings *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`107f0bc`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/107f0bcc829133daaf63a10e1cb5cbf88d1478c0) - **detect**: 🚧 add generative frame *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`3c416b2`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/3c416b26d4788acacfd4b9107d3315ab15c3c6fb) - **detect**: ✨ add score gen main *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :bug: Bug Fixes
+- [`539f39c`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/539f39c5d5a143b5856159fa6cab3d43d5591380) - **classify**: 🐛 fix text normalisation *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a818f9b`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a818f9bbfcf1602a705a7c48dfde92762bf7e6e3) - **classify**: 🐛 normalise ai, human text *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`01f633a`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/01f633a34aad40a07ec8e6158214faeede9524b0) - **classify**: 🐛 optimise to run on mac mps *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`9925e50`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/9925e5047b25c9495950bf912bb70085d8d54648) - **classify**: 🐛 include frontier ai gen *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`b6ac9eb`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/b6ac9eb43a49f4f8b7424fc3796ba1ee9d9203ef) - **calibrate**: 🐛 correct category to calibrate *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`01e3b06`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/01e3b060b723bdc02c3c0d102842625d58a2474e) - **calibrate**: 🐛 fix generation file paths *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`a87b5c4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/a87b5c41c8b92a1159c6c40a9788a04de39a24d5) - **scrape**: 🗃️ add schema for db *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`e4cc218`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/e4cc218eab9554dba59d119ecd4ba4f624a9c8e6) - **generate**: 🐛 fix text matching *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`314a811`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/314a8113e51bba1a118ab813f7dff079daf7d564) - **generate**: 🐛 add missing init *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+### :recycle: Refactors
+- [`0a6d1bb`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/0a6d1bb899aab432f12ef272ff0fb38aa7a96311) - **classify**: 🚧 restructure for my dataset *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`c6a1f5d`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/c6a1f5d07722a1fc26d698a60e55cb654ed46c5a) - **classify**: 🚧 rewrite for irish dataset *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`99f035f`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/99f035f44eadb7e9042c5e0c6959fec4ba5c9ef2) - **classify**: 🚧 restructure read_ai *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+- [`14158f4`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/14158f43bcc6212f028f638dd4fdc8e3e2897dc0) - **classify**: ♻️ rewrite for own dataset *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
+
+[v0.15.0]: https://github.com/Ri-Dearg/eire-ai-analysis/compare/v0.14.0...v0.15.0
+
 ## [v0.14.0] - 2026-08-11
 ### :sparkles: New Features
 - [`5dba1e1`](https://github.com/Ri-Dearg/eire-ai-analysis/commit/5dba1e1ff28f5318ed0f50f75344e121b3d765c3) - **board**: ✨ ass init, main for dashboard *(commit by [@Ri-Dearg](https://github.com/Ri-Dearg))*
