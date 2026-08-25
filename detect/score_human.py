@@ -35,3 +35,18 @@ def human_frame() -> pd.DataFrame:
             'text': ok['body_text'],
         }
     )
+
+
+def ai_frame() -> pd.DataFrame:
+    """Return the known-AI rows as an (id, text) frame (``ai:<model>:<n>`` ids)."""
+    ai = pd.read_csv(KNOWN_AI, dtype=str).fillna('')
+    return pd.DataFrame({'id': 'ai:' + ai['id'].astype(str), 'text': ai['text']})
+
+
+def _pending(frame: pd.DataFrame, detector: str) -> int:
+    """Return how many of ``frame``'s ids are not yet in a detector checkpoint."""
+    path = DET_DIR / f'{detector}.csv'
+    if not path.exists():
+        return len(frame)
+    done = set(pd.read_csv(path, usecols=[0]).iloc[:, 0])
+    return int((~frame['id'].isin(done)).sum())
