@@ -109,9 +109,35 @@ def _trim_file(path: Path, *, dry_run: bool) -> tuple[set[str], dict[str, int]]:
     stats = {'rows': len(rows), 'trimmed': 0, 'no_sentence': 0, 'too_short': 0}
 
     for row in rows:
+        original = row['text']
+        body = trim_to_sentence(strip_preamble(original))
+        if body == original.rstrip():
+            kept.append(row)
+            continue
+        changed.add(row['id'])
+        if not body:
+            stats['no_sentence'] += 1
+            continue
+        words = len(body.split())
+        if words < MIN_WORDS:
+            stats['too_short'] += 1
+            continue
+        lost.append(len(original.split()) - words)
+        row['text'] = body
+        row['word_count'] = str(words)
+        stats['trimmed'] += 1
+        kept.append(row)
 
+    stats['dropped'] = stats['no_sentence'] + stats['too_short']
+    stats['words_lost_mean'] = round(statistics.mean(lost)) if lost else 0
+    stats['words_lost_median'] = round(statistics.median(lost)) if lost else 0
 
-
+    if not dry_run and changed:
+        with path.open('w', newline='', encoding='utf-8') as fh:
+            writer = csv.DictWriter(fh, fieldnames=fields, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(kept)
+    return changed, stats
 
 
 def main(argv: list[str]) -> int:
@@ -142,7 +168,6 @@ def main(argv: list[str]) -> int:
             if path.exists():
                 shutil.copy2(path, backup / path.name)  # copy, never move
         print(f'backed up {len(list(backup.iterdir()))} files -> {backup}\n')
-
 
     return 0
 
