@@ -6,6 +6,7 @@ import argparse
 import csv
 import re
 import shutil
+import statistics
 import sys
 from pathlib import Path
 
@@ -14,9 +15,75 @@ GEN_DIR = ROOT / 'data' / 'generation'
 DET_DIR = ROOT / 'data' / 'detection'
 GEN_GLOB = 'generated_*.csv'
 DETECTORS = ('fastdetectgpt', 'binoculars', 'perplexity', 'radar')
-MIN_WORDS = 100
+MIN_WORDS = 100  # mirrors the notebook / API / score_gen gate
 
 csv.field_size_limit(1 << 24)
+
+# One definition of "sentence-final", used by both the fast path and the trim, so they
+# can never disagree: terminal punctuation plus an optional closing quote or bracket.
+# A body ending ".)" or '."' is complete, not cut off.
+_TERMINAL = r'[.!?]["”\')\]]?'
+_CLEAN_TAIL = re.compile(_TERMINAL + r'$')
+# Greedy + DOTALL: matches up to the LAST terminator sitting at a whitespace-or-end
+# boundary. That boundary is what stops it firing inside "EUR 1.5 million".
+_SENTENCE = re.compile(r'.*' + _TERMINAL + r'(?=\s|$)', re.S)
+
+_PREAMBLE = re.compile(
+    r'^\s*(?:sure|certainly|of course|okay)\b[^\n:]{0,60}?'
+    r"\bhere(?:'?s| is)\b[^\n:]{0,60}?:[ \t]*\n+",
+    re.I,
+)
+_BEGORRAH = re.compile(r'^\s*sure and begorrah', re.I)
+
+
+def strip_preamble(text: str) -> str:
+    """Remove a leading conversational wrapper line from a generated body.
+
+    A no-op on text that has none, so the script stays safe to re-run.
+
+    Args:
+        text (str): Generated article body.
+
+    Returns:
+        str: The body with any wrapper line removed.
+
+    """
+    if _BEGORRAH.match(text):
+        return text  # register, not wrapper: model output stays untouched
+    return _PREAMBLE.sub('', text, count=1).lstrip()
+
+
+def ends_clean(text: str) -> bool:
+    """Return True if the body already ends at a sentence boundary.
+
+    Args:
+        text (str): Article body.
+
+    Returns:
+        bool: Whether the text needs no trimming.
+
+    """
+    return bool(_CLEAN_TAIL.search(text.rstrip()))
+
+
+def trim_to_sentence(text: str) -> str:
+    """Trim a body back to its last complete sentence.
+
+    A no-op on text that already ends cleanly, which makes the whole script safe to
+    re-run over a file it has already processed.
+
+    Args:
+        text (str): Article body, possibly cut off mid-sentence.
+
+    Returns:
+        str: The trimmed body, or ``''`` if it contains no sentence boundary at all.
+
+    """
+    stripped = text.rstrip()
+    if ends_clean(stripped):
+        return stripped
+    match = _SENTENCE.match(stripped)
+    return match.group(0).rstrip() if match else ''
 
 
 def _trim_file(path: Path, *, dry_run: bool) -> tuple[set[str], dict[str, int]]:
@@ -42,8 +109,9 @@ def _trim_file(path: Path, *, dry_run: bool) -> tuple[set[str], dict[str, int]]:
     stats = {'rows': len(rows), 'trimmed': 0, 'no_sentence': 0, 'too_short': 0}
 
     for row in rows:
-        original = row['text']
-        body = original
+
+
+
 
 
 def main(argv: list[str]) -> int:
@@ -74,6 +142,8 @@ def main(argv: list[str]) -> int:
             if path.exists():
                 shutil.copy2(path, backup / path.name)  # copy, never move
         print(f'backed up {len(list(backup.iterdir()))} files -> {backup}\n')
+
+
     return 0
 
 
