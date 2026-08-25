@@ -22,6 +22,11 @@ HUMAN_PARSED = CALIBRATION_DIR / 'human_parsed.csv'
 KNOWN_AI = CALIBRATION_DIR / 'known_ai.csv'
 INPUTS = DETECTION_DIR / 'score_inputs.csv'
 
+GENERATED_MANIFESTS = (
+    DATA / 'generation' / 'generated_irish_ai.csv',
+    DATA / 'generation' / 'generated_frontier_ai.csv',
+)
+IRISH_TPR_REPORT = DETECTION_DIR / 'tpr_irish_register.csv'
 # ---------- CALCULATION FIGURES ----------
 MIN_HUMAN_CHARS = 400
 LENGTH_BANDS = (
@@ -153,6 +158,90 @@ def threshold_at_fpr(human_scores: np.ndarray, fpr: float) -> float:
     if score.size == 0:
         return float('nan')
     return float(np.quantile(score, 1.0 - fpr, method='higher'))
+
+
+def tpr_irish_register(
+    thresholds: pd.DataFrame, scores: dict[str, pd.Series]
+) -> pd.DataFrame:
+    """Return true-positive rate per detector, outlet and generated rung.
+
+    Args:
+        thresholds (pd.DataFrame): Output of :func:`calibrate`; needs ``detector``,
+            ``outlet``, ``fpr_target`` and ``threshold``.
+        scores (dict[str, pd.Series]): ``{detector: id -> score}``, as built in
+            :func:`main`.
+
+    Returns:
+        pd.DataFrame: One row per detector x outlet x fpr_target x model.
+
+    """
+    manifest = pd.concat(
+        [
+            pd.read_csv(path, usecols=['id', 'model', 'outlet'])
+            for path in GENERATED_MANIFESTS
+            if path.exists()
+        ],
+        ignore_index=True,
+    )
+    manifest = manifest[manifest['id'].str.startswith('irish_ai:')].reset_index(drop=True)
+    lookup = thresholds.set_index(['detector', 'outlet', 'fpr_target'])['threshold']
+    records: list[dict] = []
+
+    for false_positive_rate in FALSE_POSITIVE_TARGETS:
+        votes: dict[str, pd.Series] = {}
+        for detector in ALL_DETECTORS:
+            scoring = scores[detector]
+            flagged = pd.Series(data=False, index=manifest.index)
+            for outlet in OUTLETS:
+                in_outlet = manifest['outlet'] == outlet
+                threshold = lookup.get((detector, outlet, false_positive_rate), np.nan)
+                values = manifest.loc[in_outlet, 'id'].map(scoring).to_numpy(float)
+                flagged.loc[in_outlet] = values >= threshold
+                for model, group in manifest[in_outlet].groupby('model', sort=True):
+                    model_values = group['id'].map(scoring).to_numpy(float)
+                    records.append(
+                        {
+                            'detector': detector,
+                            'outlet': outlet,
+                            'fpr_target': false_positive_rate,
+                            'model': model,
+                            'n': int(np.isfinite(model_values).sum()),
+                            'tpr': positive_rate(model_values, threshold),
+                        }
+                    )
+            if detector in PRIMARY:
+                votes[detector] = flagged
+            for model, group in manifest.groupby('model', sort=True):
+                pooled = flagged.loc[group.index]
+                records.append(
+                    {
+                        'detector': detector,
+                        'outlet': '(all)',
+                        'fpr_target': false_positive_rate,
+                        'model': model,
+                        'n': len(pooled),
+                        'tpr': float(pooled.mean()),
+                    }
+                )
+        majority = (
+            sum(vote.astype(int) for vote in votes.values()) >= len(PRIMARY) // 2 + 1
+        )
+        for model, group in manifest.groupby('model', sort=True):
+            pooled = majority.loc[group.index]
+            records.append(
+                {
+                    'detector': 'ensemble_majority',
+                    'outlet': '(all)',
+                    'fpr_target': false_positive_rate,
+                    'model': model,
+                    'n': len(pooled),
+                    'tpr': float(pooled.mean()),
+                }
+            )
+
+    output = pd.DataFrame(records)
+    logger.info('irish-register TPR rows: %d', len(output))
+    return output
 
 
 # ---------- THRESHOLD CHECKS ----------
@@ -672,6 +761,7 @@ def main() -> int:
 
     threshold_df = calibrate(inputs, scores)
     threshold_df.to_csv(DETECTION_DIR / 'calibration_report.csv', index=False)
+    tpr_irish_register(threshold_df, scores).to_csv(IRISH_TPR_REPORT, index=False)
 
     corpus = inputs[inputs.group == 'corpus'].copy()
 
